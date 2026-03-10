@@ -728,57 +728,53 @@
    * Returns an array of detected uppercase letters in order.
    */
   function parseLettersFromSpeech(allText) {
-    const detected = [];
-    const combined = allText.join(" ");
+    // Try each alternative transcript separately, pick the one that yields the most letters
+    let bestResult = [];
 
-    // Strategy 1: Split combined transcript by spaces/commas and match each token
-    const tokens = combined.replace(/[,.\-!?]/g, " ").split(/\s+/).filter(Boolean);
+    for (const text of allText) {
+      const detected = [];
+      const tokens = text.replace(/[,.\-!?']/g, " ").split(/\s+/).filter(Boolean);
 
-    for (const token of tokens) {
-      // Exact single letter
-      if (token.length === 1 && ALL_LETTERS.includes(token)) {
-        detected.push(token);
-        continue;
-      }
-      // Phonetic name match
-      let found = false;
-      for (const letter of ALL_LETTERS) {
-        const phonetics = PHONETIC_MAP[letter] || [];
-        if (phonetics.some(ph => token === ph)) {
-          detected.push(letter);
-          found = true;
-          break;
+      for (const token of tokens) {
+        // Exact single letter
+        if (token.length === 1 && ALL_LETTERS.includes(token)) {
+          detected.push(token);
+          continue;
         }
-      }
-      if (found) continue;
-      // Multi-letter token like "CAT" — if all chars are A-Z, split them individually
-      if (token.length > 1 && token.length <= 12 && /^[A-Z]+$/.test(token)) {
-        for (const ch of token) detected.push(ch);
-      }
-    }
-
-    // Strategy 2: Also check each alternative transcript for full phonetic matches
-    // (handles cases where engine returns e.g. "see eighty" as single words)
-    if (detected.length === 0) {
-      for (const text of allText) {
-        const words = text.replace(/[,.\-!?]/g, " ").split(/\s+/).filter(Boolean);
-        for (const w of words) {
-          if (w.length === 1 && ALL_LETTERS.includes(w)) {
-            detected.push(w);
-          } else {
-            for (const letter of ALL_LETTERS) {
-              if ((PHONETIC_MAP[letter] || []).some(ph => w === ph)) {
-                detected.push(letter);
-                break;
-              }
-            }
+        // Phonetic name match (exact token match)
+        let found = false;
+        for (const letter of ALL_LETTERS) {
+          const phonetics = PHONETIC_MAP[letter] || [];
+          if (phonetics.some(ph => token === ph)) {
+            detected.push(letter);
+            found = true;
+            break;
           }
         }
-        if (detected.length > 0) break; // use first successful alternative
+        if (found) continue;
+        // Two-letter token that could be a letter name the engine glued together
+        // e.g. "AB" when user said "A B" — only split if len 2-3
+        if (token.length >= 2 && token.length <= 3 && /^[A-Z]+$/.test(token)) {
+          for (const ch of token) detected.push(ch);
+        }
+      }
+
+      if (detected.length > bestResult.length) {
+        bestResult = detected;
       }
     }
 
-    return detected;
+    // Fallback: if nothing found yet, try treating the entire combined text
+    // as individual characters (for when engine returns e.g. "CAT" as one word)
+    if (bestResult.length === 0) {
+      const combined = allText.join(" ");
+      const tokens = combined.replace(/[^A-Z]/g, "");
+      if (tokens.length >= 1 && tokens.length <= 15) {
+        for (const ch of tokens) bestResult.push(ch);
+      }
+    }
+
+    return bestResult;
   }
 
   /**
@@ -810,13 +806,14 @@
   /* Single shared SpeechRecognition instance */
   let recognition = null;
   let isListening = false;
+  let recognitionReady = true; // guard against rapid start/stop
 
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.maxAlternatives = 5;
+    recognition.maxAlternatives = 10;
 
     recognition.addEventListener("result", (e) => {
       if (state.answered) { stopListening(); return; }
@@ -826,24 +823,52 @@
           allText.push(e.results[i][j].transcript.toUpperCase().trim());
         }
       }
+      console.log("[Speech] transcripts:", allText);
       const letters = parseLettersFromSpeech(allText);
+      console.log("[Speech] detected letters:", letters);
       handleDetectedLetters(letters);
       stopListening();
     });
 
-    recognition.addEventListener("end", () => stopListening());
-    recognition.addEventListener("error", () => stopListening());
+    recognition.addEventListener("end", () => {
+      console.log("[Speech] ended");
+      isListening = false;
+      recognitionReady = true;
+      $("#mic-btn").classList.remove("listening");
+      $("#spell-mic-btn").classList.remove("listening");
+    });
+
+    recognition.addEventListener("error", (e) => {
+      console.warn("[Speech] error:", e.error);
+      isListening = false;
+      recognitionReady = true;
+      $("#mic-btn").classList.remove("listening");
+      $("#spell-mic-btn").classList.remove("listening");
+    });
   }
 
   function startListening() {
-    if (!recognition || state.answered) return;
+    if (!recognition || state.answered || !recognitionReady) return;
+    // If somehow still listening, stop first and retry after a delay
+    if (isListening) {
+      try { recognition.stop(); } catch (_) {}
+      setTimeout(() => startListening(), 300);
+      return;
+    }
     try {
+      recognitionReady = false;
       isListening = true;
       recognition.start();
       // Highlight whichever mic button is visible
       $("#mic-btn").classList.add("listening");
       $("#spell-mic-btn").classList.add("listening");
-    } catch (_) {}
+    } catch (err) {
+      console.warn("[Speech] start error:", err);
+      isListening = false;
+      recognitionReady = true;
+      $("#mic-btn").classList.remove("listening");
+      $("#spell-mic-btn").classList.remove("listening");
+    }
   }
 
   function stopListening() {
@@ -856,19 +881,30 @@
   /* Both mic buttons use the same recognition */
   $("#mic-btn").addEventListener("click", () => {
     ensureAudio();
-    if (isListening) stopListening();
-    else startListening();
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   });
 
   $("#spell-mic-btn").addEventListener("click", () => {
     ensureAudio();
-    if (isListening) stopListening();
-    else startListening();
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   });
 
   if (!SpeechRecognition) {
     $("#mic-btn").style.display = "none";
     $("#spell-mic-btn").style.display = "none";
+  }
+  if (SpeechRecognition) {
+    console.log("[Speech] SpeechRecognition available, recognition ready");
+  } else {
+    console.warn("[Speech] SpeechRecognition NOT available in this browser");
   }
 
   /* Undo last letter */
