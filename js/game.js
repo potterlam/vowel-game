@@ -313,10 +313,13 @@
     container.innerHTML = "";
 
     if (state.mode === "spelling") {
-      // Hide letter buttons, show text input
+      // Hide letter buttons, show spelling panel
       letterPanel.classList.add("hidden");
       spellingPanel.classList.remove("hidden");
       $("#spelling-input").value = "";
+      state.spelledLetters = [];
+      renderSpellingTiles();
+      // Show mic button for spelling mode (it uses its own mic)
       $("#mic-btn").style.display = "none";
       return;
     }
@@ -370,10 +373,9 @@
      TITLE SCREEN
      ============================ */
   function initTitle() {
-    const hasProgress = loadProgress();
-    const contBtn = $("#continue-btn");
-    if (hasProgress) contBtn.classList.remove("hidden");
-    else contBtn.classList.add("hidden");
+    loadProgress();
+    // Always show continue — lets player jump to map from any mode
+    $("#continue-btn").classList.remove("hidden");
     updateSoundBtn();
     updateModeButtons();
   }
@@ -646,6 +648,8 @@
       const inp = $("#spelling-input");
       inp.value = "";
       inp.classList.remove("spelling-correct", "spelling-wrong");
+      state.spelledLetters = [];
+      renderSpellingTiles();
       // In spelling mode, always hide word (the challenge IS to spell it)
       $("#word-letters").classList.add("hidden-hint");
     } else {
@@ -684,10 +688,176 @@
     }
   });
 
+  /* Sync text input → spelling tiles on each keystroke */
+  $("#spelling-input").addEventListener("input", () => {
+    const val = ($("#spelling-input").value || "").toUpperCase();
+    state.spelledLetters = val.split("");
+    renderSpellingTiles();
+  });
+
+  /* ---------- Spelling Tiles Renderer ---------- */
+  function renderSpellingTiles() {
+    const container = $("#spelling-tiles");
+    if (!container) return;
+    container.innerHTML = "";
+    (state.spelledLetters || []).forEach((ch, idx) => {
+      const tile = document.createElement("span");
+      tile.className = "spell-tile";
+      tile.textContent = ch;
+      tile.style.animationDelay = (idx * 0.04) + "s";
+      container.appendChild(tile);
+    });
+    // Also keep the hidden text input in sync
+    $("#spelling-input").value = (state.spelledLetters || []).join("");
+  }
+
+  /* ---------- Spelling Mic (letter-by-letter) ---------- */
+  let spellRecognition = null;
+  let isSpellListening = false;
+
+  if (SpeechRecognition) {
+    spellRecognition = new SpeechRecognition();
+    spellRecognition.lang = "en-US";
+    spellRecognition.continuous = false;
+    spellRecognition.interimResults = false;
+    spellRecognition.maxAlternatives = 5;
+
+    spellRecognition.addEventListener("result", (e) => {
+      if (state.answered) { stopSpellListening(); return; }
+
+      const allText = [];
+      for (let i = 0; i < e.results.length; i++) {
+        for (let j = 0; j < e.results[i].length; j++) {
+          allText.push(e.results[i][j].transcript.toUpperCase().trim());
+        }
+      }
+      const combined = allText.join(" ");
+
+      // All 26 letters and their phonetic names
+      const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+      const phoneticMap = {
+        "A": ["AY","LETTER A"],
+        "B": ["BEE","LETTER B"],
+        "C": ["SEE","CE","SI","LETTER C"],
+        "D": ["DEE","LETTER D"],
+        "E": ["EE","LETTER E"],
+        "F": ["EF","EFF","LETTER F"],
+        "G": ["GEE","JEE","LETTER G"],
+        "H": ["AITCH","ATCH","LETTER H"],
+        "I": ["EYE","LETTER I"],
+        "J": ["JAY","LETTER J"],
+        "K": ["KAY","LETTER K"],
+        "L": ["EL","ELL","LETTER L"],
+        "M": ["EM","LETTER M"],
+        "N": ["EN","LETTER N"],
+        "O": ["OH","LETTER O"],
+        "P": ["PEE","LETTER P"],
+        "Q": ["CUE","QUE","QUEUE","LETTER Q"],
+        "R": ["ARE","AR","LETTER R"],
+        "S": ["ES","ESS","LETTER S"],
+        "T": ["TEE","LETTER T"],
+        "U": ["YOU","YU","LETTER U"],
+        "V": ["VEE","LETTER V"],
+        "W": ["DOUBLE U","DOUBLE YOU","LETTER W"],
+        "X": ["EX","LETTER X"],
+        "Y": ["WHY","WY","LETTER Y"],
+        "Z": ["ZEE","ZED","LETTER Z"],
+      };
+
+      // Try to detect which single letter was spoken
+      let detectedLetter = null;
+
+      // First: check for single letter in transcript
+      for (const letter of ALL_LETTERS) {
+        // Check exact single-letter transcript
+        if (allText.some(t => t === letter)) {
+          detectedLetter = letter;
+          break;
+        }
+      }
+
+      // Second: check phonetic names
+      if (!detectedLetter) {
+        for (const letter of ALL_LETTERS) {
+          const phonetics = phoneticMap[letter] || [];
+          for (const ph of phonetics) {
+            if (combined.includes(ph)) {
+              detectedLetter = letter;
+              break;
+            }
+          }
+          if (detectedLetter) break;
+        }
+      }
+
+      // Third: if transcript is a single character A-Z
+      if (!detectedLetter) {
+        for (const text of allText) {
+          if (text.length === 1 && ALL_LETTERS.includes(text)) {
+            detectedLetter = text;
+            break;
+          }
+        }
+      }
+
+      if (detectedLetter) {
+        if (!state.spelledLetters) state.spelledLetters = [];
+        state.spelledLetters.push(detectedLetter);
+        renderSpellingTiles();
+        SFX.select();
+      }
+
+      stopSpellListening();
+    });
+
+    spellRecognition.addEventListener("end", () => stopSpellListening());
+    spellRecognition.addEventListener("error", () => stopSpellListening());
+  }
+
+  function startSpellListening() {
+    if (!spellRecognition || state.answered) return;
+    try {
+      isSpellListening = true;
+      spellRecognition.start();
+      $("#spell-mic-btn").classList.add("listening");
+    } catch (_) {}
+  }
+
+  function stopSpellListening() {
+    isSpellListening = false;
+    $("#spell-mic-btn").classList.remove("listening");
+    try { if (spellRecognition) spellRecognition.stop(); } catch (_) {}
+  }
+
+  $("#spell-mic-btn").addEventListener("click", () => {
+    ensureAudio();
+    if (isSpellListening) stopSpellListening();
+    else startSpellListening();
+  });
+
+  /* Undo last letter */
+  $("#spell-undo-btn").addEventListener("click", () => {
+    if (state.answered) return;
+    if (!state.spelledLetters || state.spelledLetters.length === 0) return;
+    state.spelledLetters.pop();
+    renderSpellingTiles();
+    SFX.select();
+  });
+
+  /* Clear all */
+  $("#spell-clear-btn").addEventListener("click", () => {
+    if (state.answered) return;
+    state.spelledLetters = [];
+    renderSpellingTiles();
+    SFX.select();
+  });
+
   /* ---------- Spelling Mode Submit ---------- */
   function submitSpellingAnswer() {
-    const input = $("#spelling-input");
-    const typed = (input.value || "").toUpperCase().trim();
+    // Prefer spelledLetters (from mic), fallback to text input
+    const fromTiles = (state.spelledLetters || []).join("").toUpperCase().trim();
+    const fromInput = ($("#spelling-input").value || "").toUpperCase().trim();
+    const typed = fromTiles || fromInput;
     if (!typed) return;
 
     const q = state.levelQuestions[state.currentQ];

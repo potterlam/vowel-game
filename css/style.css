@@ -726,14 +726,14 @@ html, body {
 .spelling-input {
     width: 100%;
     max-width: 280px;
-    padding: 14px 18px;
+    padding: 10px 14px;
     border-radius: 14px;
-    border: 2px solid rgba(255,215,0,.35);
-    background: rgba(255,255,255,.08);
+    border: 2px solid rgba(255,215,0,.2);
+    background: rgba(255,255,255,.05);
     color: #fff;
     font-family: var(--font-body);
-    font-size: 1.3rem;
-    font-weight: 700;
+    font-size: 1rem;
+    font-weight: 600;
     text-align: center;
     letter-spacing: 3px;
     text-transform: uppercase;
@@ -754,6 +754,81 @@ html, body {
     box-shadow: 0 0 18px rgba(231,76,60,.4);
     background: rgba(231,76,60,.12);
     animation: shakeTile .4s;
+}
+
+/* Spelling tiles (spoken letters) */
+.spelling-tiles {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    flex-wrap: wrap;
+    min-height: 44px;
+    margin-bottom: 10px;
+    padding: 6px 4px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.04);
+    border: 1px dashed rgba(255,215,0,.2);
+}
+.spell-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px; height: 38px;
+    border-radius: 8px;
+    background: rgba(155,89,182,.25);
+    border: 2px solid rgba(255,215,0,.4);
+    color: var(--gold);
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: 700;
+    animation: spellTilePop .25s ease-out;
+}
+@keyframes spellTilePop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Spelling controls row */
+.spelling-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+.spell-mic {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: rgba(231,76,60,.15);
+    border: 2px solid rgba(231,76,60,.3);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: all .3s;
+    touch-action: manipulation;
+}
+.spell-mic.listening {
+    background: rgba(231,76,60,.35);
+    border-color: var(--red);
+    animation: micPulse 1s infinite;
+}
+.btn-spell-ctrl {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+    border: 1.5px solid rgba(255,255,255,.15);
+    color: rgba(255,255,255,.6);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all .25s;
+    touch-action: manipulation;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-spell-ctrl:active {
+    transform: scale(.9);
+    background: rgba(255,255,255,.12);
+    color: #fff;
 }
 
 /* Lobby & back buttons */

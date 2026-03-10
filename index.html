@@ -141,8 +141,14 @@
 
             <!-- Spelling Input (spelling mode) -->
             <div id="spelling-panel" class="spelling-panel hidden">
-                <p class="panel-label">Spell the word you hear!</p>
-                <input id="spelling-input" class="spelling-input" type="text" autocomplete="off" autocapitalize="characters" placeholder="Type the word..." maxlength="20">
+                <p class="panel-label">Spell the word letter by letter! 🎤</p>
+                <div id="spelling-tiles" class="spelling-tiles"></div>
+                <div class="spelling-controls">
+                    <button id="spell-mic-btn" class="btn btn-mic spell-mic" title="Speak a letter">🎤</button>
+                    <button id="spell-undo-btn" class="btn btn-spell-ctrl" title="Undo last letter">⌫</button>
+                    <button id="spell-clear-btn" class="btn btn-spell-ctrl" title="Clear all">🗑️</button>
+                </div>
+                <input id="spelling-input" class="spelling-input" type="text" autocomplete="off" autocapitalize="characters" placeholder="or type here..." maxlength="20">
             </div>
 
             <!-- Action Buttons -->
