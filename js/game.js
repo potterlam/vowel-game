@@ -297,6 +297,8 @@
       $("#spelling-input").value = "";
       state.spelledLetters = [];
       renderSpellingTiles();
+      // Highlight expected first letter on A-Z keyboard
+      setTimeout(highlightExpectedKey, 50);
       // Show mic button for spelling mode (it uses its own mic)
       $("#mic-btn").style.display = "none";
       return;
@@ -695,9 +697,8 @@
   const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
   /*
-   * Phonetic map: only CLEAR, UNAMBIGUOUS names for each letter.
-   * Removed short words like "BE","DE","PE" etc. that the engine
-   * returns as common English words causing false positives.
+   * Phonetic map: maps common speech-engine outputs to letters.
+   * Includes both proper letter names and common mis-hearings.
    */
   const PHONETIC_MAP = {
     "A": ["AY","LETTER A","THE LETTER A"],
@@ -728,6 +729,14 @@
     "Z": ["ZEE","ZED","LETTER Z","THE LETTER Z"],
   };
 
+  /* Canonical letter name for Levenshtein comparison */
+  const LETTER_NAMES = {
+    A:"AY",B:"BEE",C:"CEE",D:"DEE",E:"EE",F:"EF",G:"GEE",
+    H:"AITCH",I:"EYE",J:"JAY",K:"KAY",L:"EL",M:"EM",N:"EN",
+    O:"OH",P:"PEE",Q:"CUE",R:"AR",S:"ESS",T:"TEE",U:"YOU",
+    V:"VEE",W:"DOUBLE YOU",X:"EX",Y:"WHY",Z:"ZEE"
+  };
+
   /* Words that should NOT be split into individual letters */
   const STOP_WORDS = new Set([
     "THE","AND","FOR","BUT","NOT","THIS","THAT","WITH","FROM",
@@ -740,11 +749,67 @@
     "FEW","SET","PUT","OWN","AGE","BOX","TOP","ROW","ACE",
   ]);
 
+  /* ---- Levenshtein Distance (edit distance) ---- */
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+    return dp[m][n];
+  }
+
   /**
-   * Parse ALL letters from speech transcript.
-   * Priority: single letter tokens > phonetic names > word-as-spelling (spelling mode only)
+   * Score how well a transcript token matches a given letter.
+   * Higher = better match.  Returns 0..100.
+   */
+  function scoreTokenForLetter(token, letter) {
+    // Exact single letter
+    if (token === letter) return 100;
+    // Phonetic map exact match
+    const phonetics = PHONETIC_MAP[letter] || [];
+    if (phonetics.some(ph => token === ph)) return 95;
+    // First-char match (token starts with the letter)
+    let score = 0;
+    if (token.length > 0 && token[0] === letter) score += 15;
+    // Levenshtein closeness to canonical letter name
+    const canonical = LETTER_NAMES[letter] || letter;
+    const dist = levenshtein(token, canonical);
+    const maxLen = Math.max(token.length, canonical.length, 1);
+    const similarity = 1 - dist / maxLen; // 0..1
+    score += Math.round(similarity * 60); // up to 60 points
+    return Math.min(score, 94); // cap below exact/phonetic match
+  }
+
+  /**
+   * Get the expected next letter(s) in spelling mode.
+   * Returns { expected: "P", word: "APPLE", position: 2 } or null.
+   */
+  function getSpellingContext() {
+    if (state.mode !== "spelling") return null;
+    const q = state.levelQuestions && state.levelQuestions[state.currentQ];
+    if (!q) return null;
+    const word = q.word.toUpperCase();
+    const pos = (state.spelledLetters || []).length;
+    if (pos >= word.length) return null;
+    return { expected: word[pos], word, position: pos };
+  }
+
+  /**
+   * Parse letters from speech with scoring + target-word biasing.
+   *
+   * In spelling mode we know the correct word, so we boost the score
+   * of the EXPECTED next letter by +30.  This is the client-side
+   * equivalent of Google Cloud's "Speech Adaptation" / keyword biasing.
    */
   function parseLettersFromSpeech(allText, forSpellingMode) {
+    const ctx = forSpellingMode ? getSpellingContext() : null;
     let bestResult = [];
 
     for (const text of allText) {
@@ -752,26 +817,34 @@
       const tokens = text.replace(/[,.\-!?'":;()]/g, " ").split(/\s+/).filter(Boolean);
 
       for (const token of tokens) {
-        // 1. Exact single letter (highest priority)
-        if (token.length === 1 && ALL_LETTERS.includes(token)) {
-          detected.push(token);
-          continue;
-        }
+        // Skip known stop words
+        if (STOP_WORDS.has(token)) continue;
 
-        // 2. Phonetic name match (exact token)
-        let found = false;
+        // Score token against all 26 letters
+        let bestLetter = null;
+        let bestScore = 0;
+
         for (const letter of ALL_LETTERS) {
-          const phonetics = PHONETIC_MAP[letter] || [];
-          if (phonetics.some(ph => token === ph)) {
-            detected.push(letter);
-            found = true;
-            break;
-          }
+          let s = scoreTokenForLetter(token, letter);
+          // Target-word bias: if this letter is the EXPECTED next letter, +30
+          if (ctx && letter === ctx.expected) s += 30;
+          if (s > bestScore) { bestScore = s; bestLetter = letter; }
         }
-        if (found) continue;
 
-        // 3. Skip common English words — don't split these
-        // (they are NOT letter names, the engine just heard filler words)
+        // Require minimum confidence to accept
+        // (exact/phonetic = 95-130, fuzzy+bias = 60-90, garbage < 40)
+        const threshold = ctx ? 45 : 60;
+        if (bestLetter && bestScore >= threshold) {
+          detected.push(bestLetter);
+          console.log(`[Speech] token "${token}" → ${bestLetter} (score ${bestScore})`);
+          // Advance expected letter for next token in same utterance
+          if (ctx) {
+            ctx.position++;
+            ctx.expected = ctx.position < ctx.word.length ? ctx.word[ctx.position] : null;
+          }
+        } else {
+          console.log(`[Speech] token "${token}" → rejected (best: ${bestLetter} score ${bestScore})`);
+        }
       }
 
       if (detected.length > bestResult.length) {
@@ -780,7 +853,6 @@
     }
 
     // Fallback for spelling mode: if the engine heard the whole word
-    // (e.g. user said "bird" and engine returned "bird"), use it directly
     if (forSpellingMode && bestResult.length === 0) {
       for (const text of allText) {
         const clean = text.replace(/[^A-Z]/g, "");
@@ -804,6 +876,7 @@
       if (!state.spelledLetters) state.spelledLetters = [];
       letters.forEach(l => state.spelledLetters.push(l));
       renderSpellingTiles();
+      highlightExpectedKey();
       SFX.select();
     } else {
       const targetPool = state.mode === "vowel" ? VOWELS : CONSONANTS;
@@ -930,6 +1003,7 @@
     if (!state.spelledLetters || state.spelledLetters.length === 0) return;
     state.spelledLetters.pop();
     renderSpellingTiles();
+    highlightExpectedKey();
     SFX.select();
   });
 
@@ -938,8 +1012,35 @@
     if (state.answered) return;
     state.spelledLetters = [];
     renderSpellingTiles();
+    highlightExpectedKey();
     SFX.select();
   });
+
+  /* ---------- On-screen A-Z Keyboard ---------- */
+  $$(".kb-letter").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (state.answered) return;
+      const letter = btn.dataset.kb;
+      if (!letter) return;
+      if (!state.spelledLetters) state.spelledLetters = [];
+      state.spelledLetters.push(letter);
+      renderSpellingTiles();
+      highlightExpectedKey();
+      SFX.select();
+      // Brief flash
+      btn.classList.add("kb-flash");
+      setTimeout(() => btn.classList.remove("kb-flash"), 150);
+    });
+  });
+
+  /** Highlight the next expected letter key on the on-screen keyboard */
+  function highlightExpectedKey() {
+    $$(".kb-letter").forEach(b => b.classList.remove("kb-expected"));
+    const ctx = getSpellingContext();
+    if (!ctx || !ctx.expected) return;
+    const btn = document.querySelector(`.kb-letter[data-kb="${ctx.expected}"]`);
+    if (btn) btn.classList.add("kb-expected");
+  }
 
   /* ---------- Spelling Mode Submit ---------- */
   function submitSpellingAnswer() {

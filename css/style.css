@@ -848,6 +848,40 @@ html, body {
     color: #fff;
 }
 
+/* On-screen A-Z letter keyboard (spelling fallback) */
+.letter-keyboard {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    margin: 8px auto 10px;
+    max-width: 340px;
+}
+.kb-letter {
+    width: 32px; height: 36px;
+    border-radius: 7px;
+    border: 1.5px solid rgba(255,215,0,.3);
+    background: rgba(155,89,182,.18);
+    color: var(--gold);
+    font-family: var(--font-heading);
+    font-size: .95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+.kb-letter:active, .kb-letter.kb-flash {
+    transform: scale(.88);
+    background: rgba(255,215,0,.3);
+    border-color: var(--gold);
+    color: #fff;
+}
+.kb-letter.kb-expected {
+    border-color: rgba(46,204,113,.6);
+    box-shadow: 0 0 8px rgba(46,204,113,.25);
+}
+
 /* Lobby & back buttons */
 .btn-lobby {
     display: inline-block;
@@ -1181,6 +1215,8 @@ html, body {
     .consonant-mode .vowel-btn { width: 34px; height: 34px; font-size: .85rem; }
     .spelling-input { font-size: 1.1rem; padding: 10px 14px; }
     .btn-mode { padding: 6px 10px; font-size: .72rem; }
+    .kb-letter { width: 28px; height: 32px; font-size: .82rem; }
+    .letter-keyboard { gap: 3px; max-width: 300px; }
 }
 
 @media (min-width: 481px) {
