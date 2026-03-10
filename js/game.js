@@ -37,7 +37,7 @@
 
   /* ---------- Game State ---------- */
   const state = {
-    mode: "vowel",         // "vowel" or "consonant"
+    mode: "vowel",         // "vowel", "consonant", or "spelling"
     currentLevel: 1,
     currentQ: 0,
     score: 0,
@@ -73,6 +73,13 @@
       "Consonants are the bones of words!",
       "You've unlocked the DLC! 🗡️",
       "Tap the speaker to hear the word!",
+    ],
+    spelling: [
+      "Listen and type the whole word! ⌨️",
+      "Sound it out letter by letter!",
+      "You can do it, brave speller! 📝",
+      "Tap the speaker to hear it again!",
+      "Spelling masters rule the kingdom! 👑",
     ],
   };
 
@@ -234,7 +241,11 @@
   /* ============================
      SAVE / LOAD
      ============================ */
-  function saveKey() { return state.mode === "consonant" ? "vowelquest_cons_save" : "vowelquest_save"; }
+  function saveKey() {
+    if (state.mode === "consonant") return "vowelquest_cons_save";
+    if (state.mode === "spelling") return "vowelquest_spell_save";
+    return "vowelquest_save";
+  }
 
   function saveProgress() {
     const data = {
@@ -290,12 +301,30 @@
      LETTER CHOICES BUILDER
      ============================ */
   function getTargetLetters(q) {
-    return state.mode === "consonant" ? q.consonants : q.vowels;
+    if (state.mode === "consonant") return q.consonants;
+    if (state.mode === "spelling") return q.word.split(""); // full word
+    return q.vowels;
   }
 
   function buildLetterButtons() {
     const container = $("#letter-choices");
+    const letterPanel = $("#letter-panel");
+    const spellingPanel = $("#spelling-panel");
     container.innerHTML = "";
+
+    if (state.mode === "spelling") {
+      // Hide letter buttons, show text input
+      letterPanel.classList.add("hidden");
+      spellingPanel.classList.remove("hidden");
+      $("#spelling-input").value = "";
+      $("#mic-btn").style.display = "none";
+      return;
+    }
+
+    // Show letter buttons, hide text input
+    letterPanel.classList.remove("hidden");
+    spellingPanel.classList.add("hidden");
+    $("#mic-btn").style.display = "";
 
     if (state.mode === "vowel") {
       container.classList.remove("consonant-mode");
@@ -309,7 +338,6 @@
       $("#panel-label").textContent = "Which vowels are in this word?";
     } else {
       container.classList.add("consonant-mode");
-      // Show only consonants that could be relevant (all of them for full challenge)
       CONSONANTS.forEach(c => {
         const btn = document.createElement("button");
         btn.className = "vowel-btn";
@@ -357,13 +385,11 @@
   function updateModeButtons() {
     const vBtn = $("#mode-vowel");
     const cBtn = $("#mode-consonant");
-    if (state.mode === "vowel") {
-      vBtn.classList.add("active-mode");
-      cBtn.classList.remove("active-mode");
-    } else {
-      cBtn.classList.add("active-mode");
-      vBtn.classList.remove("active-mode");
-    }
+    const sBtn = $("#mode-spelling");
+    [vBtn, cBtn, sBtn].forEach(b => b.classList.remove("active-mode"));
+    if (state.mode === "vowel") vBtn.classList.add("active-mode");
+    else if (state.mode === "consonant") cBtn.classList.add("active-mode");
+    else sBtn.classList.add("active-mode");
   }
 
   $("#mode-vowel").addEventListener("click", () => {
@@ -376,6 +402,14 @@
 
   $("#mode-consonant").addEventListener("click", () => {
     state.mode = "consonant";
+    updateModeButtons();
+    loadProgress();
+    initTitle();
+    SFX.select();
+  });
+
+  $("#mode-spelling").addEventListener("click", () => {
+    state.mode = "spelling";
     updateModeButtons();
     loadProgress();
     initTitle();
@@ -449,7 +483,7 @@
     $("#progress-fill").style.width = pct + "%";
     $("#progress-text").textContent = `${doneQ} / ${totalQ}`;
     $("#total-score").textContent = state.score;
-    $("#mode-badge-display").textContent = state.mode === "vowel" ? "🔤 Vowels Mode" : "🗡️ Consonants DLC";
+    $("#mode-badge-display").textContent = state.mode === "vowel" ? "🔤 Vowels Mode" : state.mode === "consonant" ? "🗡️ Consonants DLC" : "✏️ Spelling DLC";
 
     LEVELS.forEach(lvl => {
       const node = document.createElement("div");
@@ -607,7 +641,20 @@
     $("#feedback-overlay").classList.add("hidden");
     $("#submit-btn").disabled = false;
 
-    // Auto TTS — speak the word after a short delay
+    // Spelling mode: reset input, auto-hide word
+    if (state.mode === "spelling") {
+      const inp = $("#spelling-input");
+      inp.value = "";
+      inp.classList.remove("spelling-correct", "spelling-wrong");
+      // In spelling mode, always hide word (the challenge IS to spell it)
+      $("#word-letters").classList.add("hidden-hint");
+    } else {
+      // Reset letter buttons
+      $$(".vowel-btn").forEach(btn => {
+        btn.classList.remove("selected","correct","wrong","missed");
+        btn.disabled = false;
+      });
+    }
     setTimeout(() => {
       if (state.hintOn) {
         speakWord(q.word);
@@ -629,6 +676,108 @@
     SFX.tts();
   });
 
+  /* ---------- Spelling input Enter key ---------- */
+  $("#spelling-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitAnswer();
+    }
+  });
+
+  /* ---------- Spelling Mode Submit ---------- */
+  function submitSpellingAnswer() {
+    const input = $("#spelling-input");
+    const typed = (input.value || "").toUpperCase().trim();
+    if (!typed) return;
+
+    const q = state.levelQuestions[state.currentQ];
+    const correct = q.word.toUpperCase();
+    const isCorrect = typed === correct;
+
+    state.answered = true;
+    $("#submit-btn").disabled = true;
+
+    // Reveal the word on answer
+    $("#word-letters").classList.remove("hidden-hint");
+
+    if (isCorrect) {
+      input.classList.add("spelling-correct");
+      handleCorrectSpelling(q);
+    } else {
+      input.classList.add("spelling-wrong");
+      handleWrongSpelling(q, correct, typed);
+    }
+  }
+
+  function handleCorrectSpelling(q) {
+    SFX.correct();
+
+    // Mark all letter tiles green
+    $$(".letter-tile").forEach(tile => tile.classList.add("correct-highlight"));
+
+    let pts = PTS_CORRECT;
+    if (state.firstTry) pts += PTS_FIRST_TRY;
+    const level = LEVELS.find(l => l.id === state.currentLevel);
+    if (level && level.isBoss) pts *= PTS_BOSS_MULTI;
+    state.levelScore += pts;
+    state.levelCorrect++;
+
+    if (level && level.isBoss) {
+      state.bossHP = Math.max(0, state.bossHP - 1);
+      updateBossHUD();
+      showSlashEffect();
+      spawnParticles(canvas.width / 2, 60, 20, "#e74c3c", 4, 5, 30);
+    }
+
+    const card = $("#question-card");
+    const rect = card.getBoundingClientRect();
+    spawnParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, 25, "#ffd700", 3, 5, 35);
+    showScorePopup(pts, card);
+
+    showFeedback(true, `+${pts} points!`, q.hint);
+
+    setTimeout(() => {
+      state.currentQ++;
+      loadQuestion();
+    }, FEEDBACK_DELAY);
+  }
+
+  function handleWrongSpelling(q, correct, typed) {
+    SFX.wrong();
+    state.firstTry = false;
+    state.levelMistakes++;
+    state.lives--;
+    updateLives();
+
+    // Highlight correct vs wrong letters in the word display
+    $$(".letter-tile").forEach(tile => tile.classList.add("correct-highlight"));
+
+    const card = $("#question-card");
+    card.style.animation = "shakeTile .4s";
+    setTimeout(() => card.style.animation = "", 500);
+
+    showFeedback(false, "Not quite!", `The correct spelling is: ${correct}`);
+
+    if (state.lives <= 0) {
+      const level = LEVELS.find(l => l.id === state.currentLevel);
+      if (level && level.isBoss) {
+        setTimeout(() => gameOver(), FEEDBACK_DELAY);
+      } else {
+        setTimeout(() => {
+          state.lives = MAX_LIVES;
+          updateLives();
+          state.currentQ++;
+          loadQuestion();
+        }, FEEDBACK_DELAY);
+      }
+    } else {
+      setTimeout(() => {
+        state.currentQ++;
+        loadQuestion();
+      }, FEEDBACK_DELAY);
+    }
+  }
+
   /* ---------- Highlight letters in word ---------- */
   function highlightLetters() {
     const targetLetters = state.mode === "vowel" ? VOWELS : CONSONANTS;
@@ -647,6 +796,12 @@
 
   function submitAnswer() {
     if (state.answered) return;
+
+    if (state.mode === "spelling") {
+      submitSpellingAnswer();
+      return;
+    }
+
     if (state.selectedLetters.size === 0) return;
 
     const q = state.levelQuestions[state.currentQ];
@@ -744,7 +899,7 @@
     setTimeout(() => card.style.animation = "", 500);
 
     const answerStr = [...correctSet].join(", ");
-    const label = state.mode === "vowel" ? "vowels" : "consonants";
+    const label = state.mode === "vowel" ? "vowels" : state.mode === "consonant" ? "consonants" : "letters";
     showFeedback(false, "Not quite!", `The ${label} are: ${answerStr}`);
 
     if (state.lives <= 0) {
@@ -880,6 +1035,11 @@
     showStoryForLevel(state.currentLevel);
   });
 
+  $("#complete-lobby-btn").addEventListener("click", () => {
+    SFX.select();
+    goToLobby();
+  });
+
   /* ============================
      VICTORY
      ============================ */
@@ -891,7 +1051,9 @@
     $("#final-stars").textContent = totalStars;
     const modeText = state.mode === "vowel"
       ? "You defeated the Dark Sorcerer and restored all vowels to the Kingdom of Letters!"
-      : "You defeated the Dark Sorcerer and restored all consonants to the Kingdom of Letters!";
+      : state.mode === "consonant"
+      ? "You defeated the Dark Sorcerer and restored all consonants to the Kingdom of Letters!"
+      : "You defeated the Dark Sorcerer by spelling every word perfectly! The Kingdom of Letters is saved!";
     $("#victory-text").textContent = modeText;
     showScreen("victory");
   }
@@ -901,6 +1063,11 @@
     resetProgress();
     initTitle();
     showScreen("title");
+  });
+
+  $("#victory-lobby-btn").addEventListener("click", () => {
+    SFX.select();
+    goToLobby();
   });
 
   /* ============================
@@ -923,6 +1090,32 @@
   $("#back-map-btn").addEventListener("click", () => {
     SFX.select();
     showMapScreen();
+  });
+
+  $("#gameover-lobby-btn").addEventListener("click", () => {
+    SFX.select();
+    goToLobby();
+  });
+
+  /* ============================
+     BACK TO LOBBY
+     ============================ */
+  function goToLobby() {
+    clearBossTimer();
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    saveProgress();
+    initTitle();
+    showScreen("title");
+  }
+
+  $("#map-lobby-btn").addEventListener("click", () => {
+    SFX.select();
+    goToLobby();
+  });
+
+  $("#game-lobby-btn").addEventListener("click", () => {
+    SFX.select();
+    goToLobby();
   });
 
   /* ============================
@@ -955,7 +1148,7 @@
       const combined = allText.join(" ");
 
       // Determine which letters we're looking for
-      const targetPool = state.mode === "vowel" ? VOWELS : CONSONANTS;
+      const targetPool = state.mode === "vowel" ? VOWELS : state.mode === "consonant" ? CONSONANTS : [];
 
       // Strategy 1: Check for letter names spoken individually 
       // e.g. "A E I" or "A, E, I" or "AEI"

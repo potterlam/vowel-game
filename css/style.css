@@ -186,18 +186,19 @@ html, body {
 
 /* Mode Selector */
 .mode-selector {
-    display: flex; gap: 10px;
+    display: flex; gap: 8px;
     justify-content: center;
+    flex-wrap: wrap;
     margin-bottom: 18px;
 }
 .btn-mode {
-    padding: 10px 18px;
+    padding: 8px 14px;
     border-radius: 50px;
     border: 2px solid rgba(255,255,255,.15);
     background: rgba(255,255,255,.05);
     color: var(--text);
     font-family: var(--font-body);
-    font-size: .85rem;
+    font-size: .78rem;
     font-weight: 700;
     cursor: pointer;
     transition: all .25s;
@@ -710,6 +711,91 @@ html, body {
     font-size: 1rem;
 }
 
+/* Spelling Mode Panel */
+.spelling-panel {
+    text-align: center;
+    width: 100%;
+    padding: 0 8px;
+}
+.spelling-panel .panel-label {
+    color: var(--gold);
+    font-family: var(--font-heading);
+    font-size: .95rem;
+    margin-bottom: 10px;
+}
+.spelling-input {
+    width: 100%;
+    max-width: 280px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 2px solid rgba(255,215,0,.35);
+    background: rgba(255,255,255,.08);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 1.3rem;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color .3s, box-shadow .3s;
+}
+.spelling-input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 16px rgba(255,215,0,.25);
+}
+.spelling-input.spelling-correct {
+    border-color: var(--green);
+    box-shadow: 0 0 18px rgba(46,204,113,.4);
+    background: rgba(46,204,113,.12);
+}
+.spelling-input.spelling-wrong {
+    border-color: var(--red);
+    box-shadow: 0 0 18px rgba(231,76,60,.4);
+    background: rgba(231,76,60,.12);
+    animation: shakeTile .4s;
+}
+
+/* Lobby & back buttons */
+.btn-lobby {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 10px 24px;
+    border-radius: 30px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.18);
+    color: rgba(255,255,255,.7);
+    font-family: var(--font-body);
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .25s;
+    touch-action: manipulation;
+}
+.btn-lobby:hover, .btn-lobby:active {
+    background: rgba(255,255,255,.15);
+    color: #fff;
+    transform: scale(.97);
+}
+.btn-lobby-sm {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+    border: 1.5px solid rgba(255,255,255,.12);
+    color: rgba(255,255,255,.55);
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: all .25s;
+    touch-action: manipulation;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-lobby-sm:hover, .btn-lobby-sm:active {
+    background: rgba(255,255,255,.13);
+    color: #fff;
+}
+
 /* Action Row */
 .action-row {
     display: flex; gap: 12px;
@@ -1001,6 +1087,8 @@ html, body {
     .game-title { font-size: 2rem; }
     .title-castle-emoji { font-size: 3.5rem; }
     .consonant-mode .vowel-btn { width: 34px; height: 34px; font-size: .85rem; }
+    .spelling-input { font-size: 1.1rem; padding: 10px 14px; }
+    .btn-mode { padding: 6px 10px; font-size: .72rem; }
 }
 
 @media (min-width: 481px) {

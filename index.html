@@ -41,6 +41,7 @@
                 <div class="mode-selector">
                     <button id="mode-vowel" class="btn btn-mode active-mode">🔤 Vowels</button>
                     <button id="mode-consonant" class="btn btn-mode">🗡️ Consonants <span class="dlc-badge">DLC</span></button>
+                    <button id="mode-spelling" class="btn btn-mode">✏️ Spelling <span class="dlc-badge">DLC</span></button>
                 </div>
 
                 <button id="start-btn" class="btn btn-primary pulse-btn">⚔️ Start Adventure</button>
@@ -79,6 +80,7 @@
                 <div class="total-score-badge">⭐ <span id="total-score">0</span></div>
             </div>
             <div id="level-map" class="level-map"></div>
+            <button id="map-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
         </div>
 
         <!-- ============ GAME SCREEN ============ -->
@@ -131,16 +133,23 @@
                 <div id="word-letters" class="word-letters"></div>
             </div>
 
-            <!-- Letter Selector -->
-            <div class="vowel-panel">
+            <!-- Letter Selector (vowel/consonant modes) -->
+            <div id="letter-panel" class="vowel-panel">
                 <p id="panel-label" class="panel-label">Which vowels are in this word?</p>
                 <div id="letter-choices" class="vowel-choices"></div>
+            </div>
+
+            <!-- Spelling Input (spelling mode) -->
+            <div id="spelling-panel" class="spelling-panel hidden">
+                <p class="panel-label">Spell the word you hear!</p>
+                <input id="spelling-input" class="spelling-input" type="text" autocomplete="off" autocapitalize="characters" placeholder="Type the word..." maxlength="20">
             </div>
 
             <!-- Action Buttons -->
             <div class="action-row">
                 <button id="mic-btn" class="btn btn-mic" title="Speak letters">🎤</button>
                 <button id="submit-btn" class="btn btn-submit">✅ Submit</button>
+                <button id="game-lobby-btn" class="btn btn-lobby-sm" title="Back to Lobby">🏠</button>
             </div>
 
             <!-- Feedback Overlay -->
@@ -166,6 +175,7 @@
                     <span id="loot-item" class="loot-item"></span>
                 </div>
                 <button id="next-level-btn" class="btn btn-primary">Next Level ➜</button>
+                <button id="complete-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
             </div>
         </div>
 
@@ -182,6 +192,7 @@
                     <p>Total Stars: <strong><span id="final-stars">0</span> / 9</strong></p>
                 </div>
                 <button id="play-again-btn" class="btn btn-primary">🔄 Play Again</button>
+                <button id="victory-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
             </div>
         </div>
 
@@ -195,6 +206,7 @@
                 <p class="gameover-score">Score: <span id="gameover-score">0</span></p>
                 <button id="retry-btn" class="btn btn-primary">⚔️ Try Again</button>
                 <button id="back-map-btn" class="btn btn-secondary">🗺️ Back to Map</button>
+                <button id="gameover-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
             </div>
         </div>
     </div>
