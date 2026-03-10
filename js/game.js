@@ -2,7 +2,7 @@
    VOWEL QUEST — Game Engine  v2
    - 3 Levels × 5 random questions
    - TTS (text-to-speech) for questions
-   - Fixed speech recognition (multi-vowel)
+   - On-screen letter keyboard for spelling
    - Hint toggle (show/hide word)
    - Consonant DLC mode
    - More visual effects & companion fairy
@@ -14,7 +14,6 @@
   /* ---------- Constants ---------- */
   const VOWELS = ["A", "E", "I", "O", "U"];
   const CONSONANTS = ["B","C","D","F","G","H","J","K","L","M","N","P","Q","R","S","T","V","W","X","Y","Z"];
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const Q_PER_LEVEL = 5;
   const MAX_LIVES = 3;
   const BOSS_TIMER = 90;
@@ -299,15 +298,12 @@
       renderSpellingTiles();
       // Highlight expected first letter on A-Z keyboard
       setTimeout(highlightExpectedKey, 50);
-      // Show mic button for spelling mode (it uses its own mic)
-      $("#mic-btn").style.display = "none";
       return;
     }
 
     // Show letter buttons, hide text input
     letterPanel.classList.remove("hidden");
     spellingPanel.classList.add("hidden");
-    $("#mic-btn").style.display = "";
 
     if (state.mode === "vowel") {
       container.classList.remove("consonant-mode");
@@ -693,100 +689,6 @@
     $("#spelling-input").value = (state.spelledLetters || []).join("");
   }
 
-  /* ---------- Unified Speech Recognition (all modes) ---------- */
-  const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
-  /*
-   * Phonetic map: maps common speech-engine outputs to letters.
-   * Includes both proper letter names and common mis-hearings.
-   */
-  const PHONETIC_MAP = {
-    "A": ["AY","LETTER A","THE LETTER A"],
-    "B": ["BEE","LETTER B","THE LETTER B"],
-    "C": ["SEE","CEE","LETTER C","THE LETTER C"],
-    "D": ["DEE","LETTER D","THE LETTER D"],
-    "E": ["LETTER E","THE LETTER E","EE"],
-    "F": ["EF","EFF","LETTER F","THE LETTER F"],
-    "G": ["GEE","JEE","LETTER G","THE LETTER G"],
-    "H": ["AITCH","ATCH","LETTER H","THE LETTER H","EACH","ACHE"],
-    "I": ["EYE","LETTER I","THE LETTER I"],
-    "J": ["JAY","LETTER J","THE LETTER J"],
-    "K": ["KAY","LETTER K","THE LETTER K"],
-    "L": ["ELL","LETTER L","THE LETTER L","EL"],
-    "M": ["LETTER M","THE LETTER M","EM"],
-    "N": ["LETTER N","THE LETTER N","EN"],
-    "O": ["OH","LETTER O","THE LETTER O"],
-    "P": ["PEE","LETTER P","THE LETTER P"],
-    "Q": ["CUE","QUEUE","LETTER Q","THE LETTER Q"],
-    "R": ["ARE","OUR","LETTER R","THE LETTER R"],
-    "S": ["ESS","LETTER S","THE LETTER S","ES"],
-    "T": ["TEE","LETTER T","THE LETTER T"],
-    "U": ["YOU","YEW","LETTER U","THE LETTER U"],
-    "V": ["VEE","LETTER V","THE LETTER V"],
-    "W": ["DOUBLE U","DOUBLE YOU","DOUBLE","LETTER W","THE LETTER W"],
-    "X": ["LETTER X","THE LETTER X","EX"],
-    "Y": ["WHY","LETTER Y","THE LETTER Y"],
-    "Z": ["ZEE","ZED","LETTER Z","THE LETTER Z"],
-  };
-
-  /* Canonical letter name for Levenshtein comparison */
-  const LETTER_NAMES = {
-    A:"AY",B:"BEE",C:"CEE",D:"DEE",E:"EE",F:"EF",G:"GEE",
-    H:"AITCH",I:"EYE",J:"JAY",K:"KAY",L:"EL",M:"EM",N:"EN",
-    O:"OH",P:"PEE",Q:"CUE",R:"AR",S:"ESS",T:"TEE",U:"YOU",
-    V:"VEE",W:"DOUBLE YOU",X:"EX",Y:"WHY",Z:"ZEE"
-  };
-
-  /* Words that should NOT be split into individual letters */
-  const STOP_WORDS = new Set([
-    "THE","AND","FOR","BUT","NOT","THIS","THAT","WITH","FROM",
-    "HIS","HER","HAS","HAD","WAS","ARE","WAS","WERE","BEEN",
-    "HAVE","WILL","CAN","ALL","ITS","GOT","LET","SAY","MAY",
-    "NOW","OLD","NEW","WAY","DAY","DID","GET","HIM","HOW",
-    "MAN","OUR","OUT","USE","HER","TWO","BOY","ITS","SAY",
-    "SHE","TOO","ANY","WHO","OIL","SIT","RUN","HOT","EAT",
-    "FAR","END","TRY","ASK","MEN","RAN","OFF","RED","BIG",
-    "FEW","SET","PUT","OWN","AGE","BOX","TOP","ROW","ACE",
-  ]);
-
-  /* ---- Levenshtein Distance (edit distance) ---- */
-  function levenshtein(a, b) {
-    const m = a.length, n = b.length;
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        dp[i][j] = a[i - 1] === b[j - 1]
-          ? dp[i - 1][j - 1]
-          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      }
-    }
-    return dp[m][n];
-  }
-
-  /**
-   * Score how well a transcript token matches a given letter.
-   * Higher = better match.  Returns 0..100.
-   */
-  function scoreTokenForLetter(token, letter) {
-    // Exact single letter
-    if (token === letter) return 100;
-    // Phonetic map exact match
-    const phonetics = PHONETIC_MAP[letter] || [];
-    if (phonetics.some(ph => token === ph)) return 95;
-    // First-char match (token starts with the letter)
-    let score = 0;
-    if (token.length > 0 && token[0] === letter) score += 15;
-    // Levenshtein closeness to canonical letter name
-    const canonical = LETTER_NAMES[letter] || letter;
-    const dist = levenshtein(token, canonical);
-    const maxLen = Math.max(token.length, canonical.length, 1);
-    const similarity = 1 - dist / maxLen; // 0..1
-    score += Math.round(similarity * 60); // up to 60 points
-    return Math.min(score, 94); // cap below exact/phonetic match
-  }
-
   /**
    * Get the expected next letter(s) in spelling mode.
    * Returns { expected: "P", word: "APPLE", position: 2 } or null.
@@ -799,202 +701,6 @@
     const pos = (state.spelledLetters || []).length;
     if (pos >= word.length) return null;
     return { expected: word[pos], word, position: pos };
-  }
-
-  /**
-   * Parse letters from speech with scoring + target-word biasing.
-   *
-   * In spelling mode we know the correct word, so we boost the score
-   * of the EXPECTED next letter by +30.  This is the client-side
-   * equivalent of Google Cloud's "Speech Adaptation" / keyword biasing.
-   */
-  function parseLettersFromSpeech(allText, forSpellingMode) {
-    const ctx = forSpellingMode ? getSpellingContext() : null;
-    let bestResult = [];
-
-    for (const text of allText) {
-      const detected = [];
-      const tokens = text.replace(/[,.\-!?'":;()]/g, " ").split(/\s+/).filter(Boolean);
-
-      for (const token of tokens) {
-        // Skip known stop words
-        if (STOP_WORDS.has(token)) continue;
-
-        // Score token against all 26 letters
-        let bestLetter = null;
-        let bestScore = 0;
-
-        for (const letter of ALL_LETTERS) {
-          let s = scoreTokenForLetter(token, letter);
-          // Target-word bias: if this letter is the EXPECTED next letter, +30
-          if (ctx && letter === ctx.expected) s += 30;
-          if (s > bestScore) { bestScore = s; bestLetter = letter; }
-        }
-
-        // Require minimum confidence to accept
-        // (exact/phonetic = 95-130, fuzzy+bias = 60-90, garbage < 40)
-        const threshold = ctx ? 45 : 60;
-        if (bestLetter && bestScore >= threshold) {
-          detected.push(bestLetter);
-          console.log(`[Speech] token "${token}" → ${bestLetter} (score ${bestScore})`);
-          // Advance expected letter for next token in same utterance
-          if (ctx) {
-            ctx.position++;
-            ctx.expected = ctx.position < ctx.word.length ? ctx.word[ctx.position] : null;
-          }
-        } else {
-          console.log(`[Speech] token "${token}" → rejected (best: ${bestLetter} score ${bestScore})`);
-        }
-      }
-
-      if (detected.length > bestResult.length) {
-        bestResult = detected;
-      }
-    }
-
-    // Fallback for spelling mode: if the engine heard the whole word
-    if (forSpellingMode && bestResult.length === 0) {
-      for (const text of allText) {
-        const clean = text.replace(/[^A-Z]/g, "");
-        if (clean.length >= 2 && clean.length <= 15 && !STOP_WORDS.has(clean)) {
-          bestResult = clean.split("");
-          break;
-        }
-      }
-    }
-
-    return bestResult;
-  }
-
-  /**
-   * Route detected letters to the correct handler based on game mode.
-   */
-  function handleDetectedLetters(letters) {
-    if (!letters.length || state.answered) return;
-
-    if (state.mode === "spelling") {
-      if (!state.spelledLetters) state.spelledLetters = [];
-      letters.forEach(l => state.spelledLetters.push(l));
-      renderSpellingTiles();
-      highlightExpectedKey();
-      SFX.select();
-    } else {
-      const targetPool = state.mode === "vowel" ? VOWELS : CONSONANTS;
-      const unique = new Set(letters); // de-dupe
-      unique.forEach(letter => {
-        if (targetPool.includes(letter)) {
-          state.selectedLetters.add(letter);
-          const btn = $(`.vowel-btn[data-letter="${letter}"]`);
-          if (btn) btn.classList.add("selected");
-        }
-      });
-      highlightLetters();
-    }
-  }
-
-  /* Single shared SpeechRecognition instance */
-  let recognition = null;
-  let isListening = false;
-  let recognitionReady = true; // guard against rapid start/stop
-
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 10;
-
-    recognition.addEventListener("result", (e) => {
-      if (state.answered) { stopListening(); return; }
-      const allText = [];
-      for (let i = 0; i < e.results.length; i++) {
-        for (let j = 0; j < e.results[i].length; j++) {
-          allText.push(e.results[i][j].transcript.toUpperCase().trim());
-        }
-      }
-      console.log("[Speech] raw transcripts:", JSON.stringify(allText));
-      const isSpelling = state.mode === "spelling";
-      const letters = parseLettersFromSpeech(allText, isSpelling);
-      console.log("[Speech] detected letters:", JSON.stringify(letters));
-      handleDetectedLetters(letters);
-      stopListening();
-    });
-
-    recognition.addEventListener("end", () => {
-      console.log("[Speech] ended");
-      isListening = false;
-      recognitionReady = true;
-      $("#mic-btn").classList.remove("listening");
-      $("#spell-mic-btn").classList.remove("listening");
-    });
-
-    recognition.addEventListener("error", (e) => {
-      console.warn("[Speech] error:", e.error);
-      isListening = false;
-      recognitionReady = true;
-      $("#mic-btn").classList.remove("listening");
-      $("#spell-mic-btn").classList.remove("listening");
-    });
-  }
-
-  function startListening() {
-    if (!recognition || state.answered || !recognitionReady) return;
-    // If somehow still listening, stop first and retry after a delay
-    if (isListening) {
-      try { recognition.stop(); } catch (_) {}
-      setTimeout(() => startListening(), 300);
-      return;
-    }
-    try {
-      recognitionReady = false;
-      isListening = true;
-      recognition.start();
-      // Highlight whichever mic button is visible
-      $("#mic-btn").classList.add("listening");
-      $("#spell-mic-btn").classList.add("listening");
-    } catch (err) {
-      console.warn("[Speech] start error:", err);
-      isListening = false;
-      recognitionReady = true;
-      $("#mic-btn").classList.remove("listening");
-      $("#spell-mic-btn").classList.remove("listening");
-    }
-  }
-
-  function stopListening() {
-    isListening = false;
-    $("#mic-btn").classList.remove("listening");
-    $("#spell-mic-btn").classList.remove("listening");
-    try { if (recognition) recognition.stop(); } catch (_) {}
-  }
-
-  /* Both mic buttons use the same recognition */
-  $("#mic-btn").addEventListener("click", () => {
-    ensureAudio();
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  });
-
-  $("#spell-mic-btn").addEventListener("click", () => {
-    ensureAudio();
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  });
-
-  if (!SpeechRecognition) {
-    $("#mic-btn").style.display = "none";
-    $("#spell-mic-btn").style.display = "none";
-  }
-  if (SpeechRecognition) {
-    console.log("[Speech] SpeechRecognition available, recognition ready");
-  } else {
-    console.warn("[Speech] SpeechRecognition NOT available in this browser");
   }
 
   /* Undo last letter */

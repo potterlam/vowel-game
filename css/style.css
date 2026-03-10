@@ -813,21 +813,6 @@ html, body {
     justify-content: center;
     margin-bottom: 8px;
 }
-.spell-mic {
-    width: 52px; height: 52px;
-    border-radius: 50%;
-    background: rgba(231,76,60,.15);
-    border: 2px solid rgba(231,76,60,.3);
-    font-size: 1.4rem;
-    cursor: pointer;
-    transition: all .3s;
-    touch-action: manipulation;
-}
-.spell-mic.listening {
-    background: rgba(231,76,60,.35);
-    border-color: var(--red);
-    animation: micPulse 1s infinite;
-}
 .btn-spell-ctrl {
     width: 44px; height: 44px;
     border-radius: 50%;
@@ -927,26 +912,6 @@ html, body {
     display: flex; gap: 12px;
     justify-content: center;
     width: 100%;
-}
-.btn-mic {
-    width: 52px; height: 52px;
-    border-radius: 50%;
-    background: rgba(255,255,255,.08);
-    border: 2px solid rgba(255,255,255,.15);
-    font-size: 1.4rem;
-    cursor: pointer;
-    transition: all .3s;
-    touch-action: manipulation;
-}
-.btn-mic:active { transform: scale(.9); }
-.btn-mic.listening {
-    background: rgba(231,76,60,.3);
-    border-color: var(--red);
-    animation: micPulse 1s infinite;
-}
-@keyframes micPulse {
-    0%,100% { box-shadow: 0 0 0 0 rgba(231,76,60,.4); }
-    50% { box-shadow: 0 0 0 12px rgba(231,76,60,0); }
 }
 .btn-submit {
     flex: 1; max-width: 200px;
