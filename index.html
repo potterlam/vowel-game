@@ -12,6 +12,14 @@
     <div id="game-container">
         <canvas id="particles"></canvas>
 
+        <!-- Animated castle background layer -->
+        <div class="bg-castle-scene">
+            <div class="bg-moon">🌙</div>
+            <div class="bg-cloud c1">☁️</div>
+            <div class="bg-cloud c2">☁️</div>
+            <div class="bg-bats"><span>🦇</span><span>🦇</span><span>🦇</span></div>
+        </div>
+
         <!-- ============ TITLE SCREEN ============ -->
         <div id="title-screen" class="screen active">
             <div class="floating-emojis">
@@ -20,21 +28,33 @@
                 <span class="float-emoji" style="--delay:2s;--x:50%">🌟</span>
                 <span class="float-emoji" style="--delay:0.5s;--x:70%">✨</span>
                 <span class="float-emoji" style="--delay:1.5s;--x:88%">⭐</span>
+                <span class="float-emoji" style="--delay:3s;--x:35%">🔮</span>
+                <span class="float-emoji" style="--delay:2.5s;--x:60%">💎</span>
             </div>
             <div class="title-content">
                 <div class="title-castle-emoji">🏰</div>
                 <h1 class="game-title">Vowel Quest</h1>
                 <h2 class="game-subtitle">Castle of Letters</h2>
                 <p class="title-tagline">Find the vowels. Save the kingdom.</p>
+
+                <!-- Mode Selection -->
+                <div class="mode-selector">
+                    <button id="mode-vowel" class="btn btn-mode active-mode">🔤 Vowels</button>
+                    <button id="mode-consonant" class="btn btn-mode">🗡️ Consonants <span class="dlc-badge">DLC</span></button>
+                </div>
+
                 <button id="start-btn" class="btn btn-primary pulse-btn">⚔️ Start Adventure</button>
                 <button id="continue-btn" class="btn btn-secondary hidden">📜 Continue Quest</button>
             </div>
-            <button id="sound-toggle" class="btn-icon sound-btn">🔊</button>
+            <div class="top-controls">
+                <button id="sound-toggle" class="btn-icon sound-btn">🔊</button>
+            </div>
         </div>
 
         <!-- ============ STORY SCREEN ============ -->
         <div id="story-screen" class="screen">
             <div class="story-container">
+                <div class="story-bg-glow"></div>
                 <div class="story-character-frame">
                     <span id="story-character">🧙‍♂️</span>
                 </div>
@@ -49,11 +69,12 @@
         <div id="map-screen" class="screen">
             <div class="map-header">
                 <h2 class="map-title">🗺️ Castle Map</h2>
+                <div class="mode-badge-display" id="mode-badge-display">🔤 Vowels Mode</div>
                 <div class="overall-progress">
                     <div class="progress-track">
                         <div id="progress-fill" class="progress-fill"></div>
                     </div>
-                    <span id="progress-text" class="progress-label">0 / 100</span>
+                    <span id="progress-text" class="progress-label">0 / 15</span>
                 </div>
                 <div class="total-score-badge">⭐ <span id="total-score">0</span></div>
             </div>
@@ -74,9 +95,21 @@
                 </div>
             </div>
 
-            <div id="lives-bar" class="lives-bar"></div>
+            <div class="game-sub-hud">
+                <div id="lives-bar" class="lives-bar"></div>
+                <button id="hint-toggle" class="btn-hint" title="Toggle word hint">
+                    <span class="hint-icon">💡</span>
+                    <span class="hint-label">Show Word</span>
+                </button>
+            </div>
 
-            <!-- Boss fight HUD (hidden until level 10) -->
+            <!-- Adventure character companion -->
+            <div id="companion" class="companion">
+                <span class="companion-sprite">🧚</span>
+                <div id="companion-msg" class="companion-msg hidden"></div>
+            </div>
+
+            <!-- Boss fight HUD -->
             <div id="boss-hud" class="boss-hud hidden">
                 <div class="boss-avatar-wrap">
                     <span id="boss-avatar" class="boss-avatar">🧙‍♂️</span>
@@ -84,9 +117,9 @@
                 </div>
                 <div class="boss-hp-track">
                     <div id="boss-hp-fill" class="boss-hp-fill"></div>
-                    <span id="boss-hp-text" class="boss-hp-label">10 / 10</span>
+                    <span id="boss-hp-text" class="boss-hp-label">5 / 5</span>
                 </div>
-                <div class="boss-timer">⏱️ <span id="timer-value">120</span>s</div>
+                <div class="boss-timer">⏱️ <span id="timer-value">90</span>s</div>
             </div>
 
             <!-- Question Card -->
@@ -94,24 +127,19 @@
                 <div class="picture-frame">
                     <div id="word-emoji" class="word-emoji"></div>
                 </div>
+                <button id="tts-btn" class="btn-tts" title="Hear the word">🔊</button>
                 <div id="word-letters" class="word-letters"></div>
             </div>
 
-            <!-- Vowel Selector -->
+            <!-- Letter Selector -->
             <div class="vowel-panel">
-                <p class="panel-label">Which vowels are in this word?</p>
-                <div class="vowel-choices">
-                    <button class="vowel-btn" data-vowel="A">A</button>
-                    <button class="vowel-btn" data-vowel="E">E</button>
-                    <button class="vowel-btn" data-vowel="I">I</button>
-                    <button class="vowel-btn" data-vowel="O">O</button>
-                    <button class="vowel-btn" data-vowel="U">U</button>
-                </div>
+                <p id="panel-label" class="panel-label">Which vowels are in this word?</p>
+                <div id="letter-choices" class="vowel-choices"></div>
             </div>
 
             <!-- Action Buttons -->
             <div class="action-row">
-                <button id="mic-btn" class="btn btn-mic" title="Speak vowels">🎤</button>
+                <button id="mic-btn" class="btn btn-mic" title="Speak letters">🎤</button>
                 <button id="submit-btn" class="btn btn-submit">✅ Submit</button>
             </div>
 
@@ -124,14 +152,18 @@
         <!-- ============ LEVEL COMPLETE SCREEN ============ -->
         <div id="complete-screen" class="screen">
             <div class="complete-container">
+                <div class="complete-trophy-anim">🏅</div>
                 <h2 class="complete-title">🎉 Level Complete!</h2>
                 <div id="stars-earned" class="stars-earned"></div>
                 <div class="complete-stats">
                     <p>Score: <strong><span id="level-score-value">0</span></strong></p>
-                    <p>Correct: <strong><span id="level-correct-value">0</span> / 10</strong></p>
+                    <p>Correct: <strong><span id="level-correct-value">0</span> / 5</strong></p>
                 </div>
                 <div class="complete-story">
                     <p id="complete-story-text"></p>
+                </div>
+                <div class="complete-loot">
+                    <span id="loot-item" class="loot-item"></span>
                 </div>
                 <button id="next-level-btn" class="btn btn-primary">Next Level ➜</button>
             </div>
@@ -144,10 +176,10 @@
                 <h1 class="victory-title">🏆 Victory! 🏆</h1>
                 <div class="victory-hero">🦸</div>
                 <h2>The Kingdom is Saved!</h2>
-                <p class="victory-text">You defeated the Dark Sorcerer and restored all vowels to the Kingdom of Letters!</p>
+                <p class="victory-text" id="victory-text">You defeated the Dark Sorcerer and restored all vowels to the Kingdom of Letters!</p>
                 <div class="final-stats">
                     <p>Final Score: <strong><span id="final-score">0</span></strong></p>
-                    <p>Total Stars: <strong><span id="final-stars">0</span> / 30</strong></p>
+                    <p>Total Stars: <strong><span id="final-stars">0</span> / 9</strong></p>
                 </div>
                 <button id="play-again-btn" class="btn btn-primary">🔄 Play Again</button>
             </div>
@@ -156,7 +188,8 @@
         <!-- ============ GAME OVER SCREEN ============ -->
         <div id="gameover-screen" class="screen">
             <div class="gameover-container">
-                <h1 class="gameover-title">💀 Defeated!</h1>
+                <div class="gameover-skull">💀</div>
+                <h1 class="gameover-title">Defeated!</h1>
                 <p class="gameover-text">The Dark Sorcerer's power was too great…</p>
                 <p class="gameover-sub">But a true knight never gives up!</p>
                 <p class="gameover-score">Score: <span id="gameover-score">0</span></p>
