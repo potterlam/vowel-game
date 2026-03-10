@@ -691,129 +691,185 @@
     $("#spelling-input").value = (state.spelledLetters || []).join("");
   }
 
-  /* ---------- Spelling Mic (letter-by-letter) ---------- */
-  let spellRecognition = null;
-  let isSpellListening = false;
+  /* ---------- Unified Speech Recognition (all modes) ---------- */
+  const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const PHONETIC_MAP = {
+    "A": ["AY","LETTER A"],
+    "B": ["BEE","BE","LETTER B"],
+    "C": ["SEE","CE","SI","LETTER C"],
+    "D": ["DEE","DE","LETTER D"],
+    "E": ["EE","LETTER E"],
+    "F": ["EF","EFF","LETTER F"],
+    "G": ["GEE","JEE","LETTER G"],
+    "H": ["AITCH","ATCH","LETTER H"],
+    "I": ["EYE","LETTER I"],
+    "J": ["JAY","LETTER J"],
+    "K": ["KAY","LETTER K"],
+    "L": ["EL","ELL","LETTER L"],
+    "M": ["EM","LETTER M"],
+    "N": ["EN","LETTER N"],
+    "O": ["OH","LETTER O"],
+    "P": ["PEE","PE","LETTER P"],
+    "Q": ["CUE","QUE","QUEUE","LETTER Q"],
+    "R": ["ARE","AR","LETTER R"],
+    "S": ["ES","ESS","LETTER S"],
+    "T": ["TEE","TE","LETTER T"],
+    "U": ["YOU","YU","LETTER U"],
+    "V": ["VEE","VE","LETTER V"],
+    "W": ["DOUBLE U","DOUBLE YOU","LETTER W"],
+    "X": ["EX","LETTER X"],
+    "Y": ["WHY","WY","LETTER Y"],
+    "Z": ["ZEE","ZED","LETTER Z"],
+  };
+
+  /**
+   * Parse ALL letters from speech transcript.
+   * Handles: "C A T", "see ay tee", "CAT", single letters, phonetic names.
+   * Returns an array of detected uppercase letters in order.
+   */
+  function parseLettersFromSpeech(allText) {
+    const detected = [];
+    const combined = allText.join(" ");
+
+    // Strategy 1: Split combined transcript by spaces/commas and match each token
+    const tokens = combined.replace(/[,.\-!?]/g, " ").split(/\s+/).filter(Boolean);
+
+    for (const token of tokens) {
+      // Exact single letter
+      if (token.length === 1 && ALL_LETTERS.includes(token)) {
+        detected.push(token);
+        continue;
+      }
+      // Phonetic name match
+      let found = false;
+      for (const letter of ALL_LETTERS) {
+        const phonetics = PHONETIC_MAP[letter] || [];
+        if (phonetics.some(ph => token === ph)) {
+          detected.push(letter);
+          found = true;
+          break;
+        }
+      }
+      if (found) continue;
+      // Multi-letter token like "CAT" — if all chars are A-Z, split them individually
+      if (token.length > 1 && token.length <= 12 && /^[A-Z]+$/.test(token)) {
+        for (const ch of token) detected.push(ch);
+      }
+    }
+
+    // Strategy 2: Also check each alternative transcript for full phonetic matches
+    // (handles cases where engine returns e.g. "see eighty" as single words)
+    if (detected.length === 0) {
+      for (const text of allText) {
+        const words = text.replace(/[,.\-!?]/g, " ").split(/\s+/).filter(Boolean);
+        for (const w of words) {
+          if (w.length === 1 && ALL_LETTERS.includes(w)) {
+            detected.push(w);
+          } else {
+            for (const letter of ALL_LETTERS) {
+              if ((PHONETIC_MAP[letter] || []).some(ph => w === ph)) {
+                detected.push(letter);
+                break;
+              }
+            }
+          }
+        }
+        if (detected.length > 0) break; // use first successful alternative
+      }
+    }
+
+    return detected;
+  }
+
+  /**
+   * Route detected letters to the correct handler based on game mode.
+   */
+  function handleDetectedLetters(letters) {
+    if (!letters.length || state.answered) return;
+
+    if (state.mode === "spelling") {
+      // Add all detected letters to spelling tiles
+      if (!state.spelledLetters) state.spelledLetters = [];
+      letters.forEach(l => state.spelledLetters.push(l));
+      renderSpellingTiles();
+      SFX.select();
+    } else {
+      // Vowel / Consonant mode — select matching buttons
+      const targetPool = state.mode === "vowel" ? VOWELS : CONSONANTS;
+      letters.forEach(letter => {
+        if (targetPool.includes(letter)) {
+          state.selectedLetters.add(letter);
+          const btn = $(`.vowel-btn[data-letter="${letter}"]`);
+          if (btn) btn.classList.add("selected");
+        }
+      });
+      highlightLetters();
+    }
+  }
+
+  /* Single shared SpeechRecognition instance */
+  let recognition = null;
+  let isListening = false;
 
   if (SpeechRecognition) {
-    spellRecognition = new SpeechRecognition();
-    spellRecognition.lang = "en-US";
-    spellRecognition.continuous = false;
-    spellRecognition.interimResults = false;
-    spellRecognition.maxAlternatives = 5;
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 5;
 
-    spellRecognition.addEventListener("result", (e) => {
-      if (state.answered) { stopSpellListening(); return; }
-
+    recognition.addEventListener("result", (e) => {
+      if (state.answered) { stopListening(); return; }
       const allText = [];
       for (let i = 0; i < e.results.length; i++) {
         for (let j = 0; j < e.results[i].length; j++) {
           allText.push(e.results[i][j].transcript.toUpperCase().trim());
         }
       }
-      const combined = allText.join(" ");
-
-      // All 26 letters and their phonetic names
-      const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-      const phoneticMap = {
-        "A": ["AY","LETTER A"],
-        "B": ["BEE","LETTER B"],
-        "C": ["SEE","CE","SI","LETTER C"],
-        "D": ["DEE","LETTER D"],
-        "E": ["EE","LETTER E"],
-        "F": ["EF","EFF","LETTER F"],
-        "G": ["GEE","JEE","LETTER G"],
-        "H": ["AITCH","ATCH","LETTER H"],
-        "I": ["EYE","LETTER I"],
-        "J": ["JAY","LETTER J"],
-        "K": ["KAY","LETTER K"],
-        "L": ["EL","ELL","LETTER L"],
-        "M": ["EM","LETTER M"],
-        "N": ["EN","LETTER N"],
-        "O": ["OH","LETTER O"],
-        "P": ["PEE","LETTER P"],
-        "Q": ["CUE","QUE","QUEUE","LETTER Q"],
-        "R": ["ARE","AR","LETTER R"],
-        "S": ["ES","ESS","LETTER S"],
-        "T": ["TEE","LETTER T"],
-        "U": ["YOU","YU","LETTER U"],
-        "V": ["VEE","LETTER V"],
-        "W": ["DOUBLE U","DOUBLE YOU","LETTER W"],
-        "X": ["EX","LETTER X"],
-        "Y": ["WHY","WY","LETTER Y"],
-        "Z": ["ZEE","ZED","LETTER Z"],
-      };
-
-      // Try to detect which single letter was spoken
-      let detectedLetter = null;
-
-      // First: check for single letter in transcript
-      for (const letter of ALL_LETTERS) {
-        // Check exact single-letter transcript
-        if (allText.some(t => t === letter)) {
-          detectedLetter = letter;
-          break;
-        }
-      }
-
-      // Second: check phonetic names
-      if (!detectedLetter) {
-        for (const letter of ALL_LETTERS) {
-          const phonetics = phoneticMap[letter] || [];
-          for (const ph of phonetics) {
-            if (combined.includes(ph)) {
-              detectedLetter = letter;
-              break;
-            }
-          }
-          if (detectedLetter) break;
-        }
-      }
-
-      // Third: if transcript is a single character A-Z
-      if (!detectedLetter) {
-        for (const text of allText) {
-          if (text.length === 1 && ALL_LETTERS.includes(text)) {
-            detectedLetter = text;
-            break;
-          }
-        }
-      }
-
-      if (detectedLetter) {
-        if (!state.spelledLetters) state.spelledLetters = [];
-        state.spelledLetters.push(detectedLetter);
-        renderSpellingTiles();
-        SFX.select();
-      }
-
-      stopSpellListening();
+      const letters = parseLettersFromSpeech(allText);
+      handleDetectedLetters(letters);
+      stopListening();
     });
 
-    spellRecognition.addEventListener("end", () => stopSpellListening());
-    spellRecognition.addEventListener("error", () => stopSpellListening());
+    recognition.addEventListener("end", () => stopListening());
+    recognition.addEventListener("error", () => stopListening());
   }
 
-  function startSpellListening() {
-    if (!spellRecognition || state.answered) return;
+  function startListening() {
+    if (!recognition || state.answered) return;
     try {
-      isSpellListening = true;
-      spellRecognition.start();
+      isListening = true;
+      recognition.start();
+      // Highlight whichever mic button is visible
+      $("#mic-btn").classList.add("listening");
       $("#spell-mic-btn").classList.add("listening");
     } catch (_) {}
   }
 
-  function stopSpellListening() {
-    isSpellListening = false;
+  function stopListening() {
+    isListening = false;
+    $("#mic-btn").classList.remove("listening");
     $("#spell-mic-btn").classList.remove("listening");
-    try { if (spellRecognition) spellRecognition.stop(); } catch (_) {}
+    try { if (recognition) recognition.stop(); } catch (_) {}
   }
+
+  /* Both mic buttons use the same recognition */
+  $("#mic-btn").addEventListener("click", () => {
+    ensureAudio();
+    if (isListening) stopListening();
+    else startListening();
+  });
 
   $("#spell-mic-btn").addEventListener("click", () => {
     ensureAudio();
-    if (isSpellListening) stopSpellListening();
-    else startSpellListening();
+    if (isListening) stopListening();
+    else startListening();
   });
+
+  if (!SpeechRecognition) {
+    $("#mic-btn").style.display = "none";
+    $("#spell-mic-btn").style.display = "none";
+  }
 
   /* Undo last letter */
   $("#spell-undo-btn").addEventListener("click", () => {
@@ -1268,126 +1324,6 @@
     SFX.select();
     goToLobby();
   });
-
-  /* ============================
-     SPEECH RECOGNITION — FIXED
-     Supports multi-letter detection:
-     Uses continuous mode + processes all
-     alternatives + letter-by-letter parsing
-     ============================ */
-  let recognition = null;
-  let isListening = false;
-
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 5;
-
-    recognition.addEventListener("result", (e) => {
-      if (state.answered) { stopListening(); return; }
-
-      // Collect ALL transcripts from all alternatives
-      const allText = [];
-      for (let i = 0; i < e.results.length; i++) {
-        for (let j = 0; j < e.results[i].length; j++) {
-          allText.push(e.results[i][j].transcript.toUpperCase().trim());
-        }
-      }
-      const combined = allText.join(" ");
-
-      // Determine which letters we're looking for
-      const targetPool = state.mode === "vowel" ? VOWELS : state.mode === "consonant" ? CONSONANTS : [];
-
-      // Strategy 1: Check for letter names spoken individually 
-      // e.g. "A E I" or "A, E, I" or "AEI"
-      targetPool.forEach(letter => {
-        // Check if the letter appears as a standalone word or in the string
-        // Use word boundary or just character presence
-        if (combined.includes(letter)) {
-          state.selectedLetters.add(letter);
-          const btn = $(`.vowel-btn[data-letter="${letter}"]`);
-          if (btn) btn.classList.add("selected");
-        }
-      });
-
-      // Strategy 2: Check for phonetic letter names
-      // e.g., "ay" = A, "ee" = E, "eye" = I, "oh" = O, "you" = U
-      const phoneticMap = {
-        "A": ["AY","AEI","LETTER A"],
-        "E": ["EE","LETTER E"],
-        "I": ["EYE","AI","LETTER I"],
-        "O": ["OH","LETTER O"],
-        "U": ["YOU","YU","LETTER U"],
-        // Consonant phonetics
-        "B": ["BEE","BE"],
-        "C": ["SEE","CE","SI"],
-        "D": ["DEE","DE"],
-        "F": ["EF","EFF"],
-        "G": ["GEE","JEE"],
-        "H": ["AITCH","ATCH"],
-        "J": ["JAY"],
-        "K": ["KAY"],
-        "L": ["EL","ELL"],
-        "M": ["EM"],
-        "N": ["EN"],
-        "P": ["PEE","PE"],
-        "Q": ["CUE","QUE","QUEUE"],
-        "R": ["ARE","AR"],
-        "S": ["ES","ESS"],
-        "T": ["TEE","TE"],
-        "V": ["VEE","VE"],
-        "W": ["DOUBLE U","DOUBLE YOU","DOUBLE"],
-        "X": ["EX"],
-        "Y": ["WHY","WY"],
-        "Z": ["ZEE","ZED"],
-      };
-
-      targetPool.forEach(letter => {
-        const phonetics = phoneticMap[letter] || [];
-        for (const ph of phonetics) {
-          if (combined.includes(ph)) {
-            state.selectedLetters.add(letter);
-            const btn = $(`.vowel-btn[data-letter="${letter}"]`);
-            if (btn) btn.classList.add("selected");
-            break;
-          }
-        }
-      });
-
-      highlightLetters();
-      stopListening();
-    });
-
-    recognition.addEventListener("end", () => stopListening());
-    recognition.addEventListener("error", () => stopListening());
-  }
-
-  function startListening() {
-    if (!recognition || state.answered) return;
-    try {
-      isListening = true;
-      recognition.start();
-      $("#mic-btn").classList.add("listening");
-    } catch (_) {}
-  }
-
-  function stopListening() {
-    isListening = false;
-    $("#mic-btn").classList.remove("listening");
-    try { if (recognition) recognition.stop(); } catch (_) {}
-  }
-
-  $("#mic-btn").addEventListener("click", () => {
-    ensureAudio();
-    if (isListening) stopListening();
-    else startListening();
-  });
-
-  if (!SpeechRecognition) {
-    $("#mic-btn").style.display = "none";
-  }
 
   /* ============================
      AMBIENT PARTICLES
