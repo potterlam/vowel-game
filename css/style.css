@@ -183,6 +183,23 @@ html, body {
     transition: opacity var(--transition);
 }
 .sound-btn:hover { opacity: 1; }
+.lang-btn {
+    background: rgba(255,255,255,.08);
+    border: 1.5px solid rgba(255,215,0,.3);
+    color: var(--gold);
+    font-size: .85rem;
+    font-weight: 700;
+    font-family: var(--font-body);
+    padding: 4px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all .25s;
+    touch-action: manipulation;
+}
+.lang-btn:hover, .lang-btn:active {
+    background: rgba(255,215,0,.15);
+    border-color: var(--gold);
+}
 
 /* Mode Selector */
 .mode-selector {

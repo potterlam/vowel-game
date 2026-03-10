@@ -33,21 +33,22 @@
             </div>
             <div class="title-content">
                 <div class="title-castle-emoji">🏰</div>
-                <h1 class="game-title">Vowel Quest</h1>
-                <h2 class="game-subtitle">Castle of Letters</h2>
-                <p class="title-tagline">Find the vowels. Save the kingdom.</p>
+                <h1 class="game-title" data-i18n="gameTitle">Vowel Quest</h1>
+                <h2 class="game-subtitle" data-i18n="gameSubtitle">Castle of Letters</h2>
+                <p class="title-tagline" data-i18n="tagline">Find the vowels. Save the kingdom.</p>
 
                 <!-- Mode Selection -->
                 <div class="mode-selector">
-                    <button id="mode-vowel" class="btn btn-mode active-mode">🔤 Vowels</button>
-                    <button id="mode-consonant" class="btn btn-mode">🗡️ Consonants <span class="dlc-badge">DLC</span></button>
-                    <button id="mode-spelling" class="btn btn-mode">✏️ Spelling <span class="dlc-badge">DLC</span></button>
+                    <button id="mode-vowel" class="btn btn-mode active-mode"><span data-i18n="modeVowelLabel">🔤 Vowels</span></button>
+                    <button id="mode-consonant" class="btn btn-mode"><span data-i18n="modeConsLabel">🗡️ Consonants</span> <span class="dlc-badge" data-i18n="dlcBadge">DLC</span></button>
+                    <button id="mode-spelling" class="btn btn-mode"><span data-i18n="modeSpellLabel">✏️ Spelling</span> <span class="dlc-badge" data-i18n="dlcBadge">DLC</span></button>
                 </div>
 
-                <button id="start-btn" class="btn btn-primary pulse-btn">⚔️ Start Adventure</button>
-                <button id="continue-btn" class="btn btn-secondary hidden">📜 Continue Quest</button>
+                <button id="start-btn" class="btn btn-primary pulse-btn" data-i18n="startBtn">⚔️ Start Adventure</button>
+                <button id="continue-btn" class="btn btn-secondary hidden" data-i18n="continueBtn">📜 Continue Quest</button>
             </div>
             <div class="top-controls">
+                <button id="lang-toggle" class="btn-icon lang-btn" title="中文/English">中</button>
                 <button id="sound-toggle" class="btn-icon sound-btn">🔊</button>
             </div>
         </div>
@@ -62,14 +63,14 @@
                 <div class="story-bubble">
                     <p id="story-text"></p>
                 </div>
-                <button id="story-continue-btn" class="btn btn-primary">Continue ➜</button>
+                <button id="story-continue-btn" class="btn btn-primary" data-i18n="storyContBtn">Continue ➜</button>
             </div>
         </div>
 
         <!-- ============ LEVEL MAP SCREEN ============ -->
         <div id="map-screen" class="screen">
             <div class="map-header">
-                <h2 class="map-title">🗺️ Castle Map</h2>
+                <h2 class="map-title" data-i18n="mapTitle">🗺️ Castle Map</h2>
                 <div class="mode-badge-display" id="mode-badge-display">🔤 Vowels Mode</div>
                 <div class="overall-progress">
                     <div class="progress-track">
@@ -80,7 +81,7 @@
                 <div class="total-score-badge">⭐ <span id="total-score">0</span></div>
             </div>
             <div id="level-map" class="level-map"></div>
-            <button id="map-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
+            <button id="map-lobby-btn" class="btn btn-lobby" data-i18n="lobbyBtn">🏠 Back to Lobby</button>
         </div>
 
         <!-- ============ GAME SCREEN ============ -->
@@ -115,7 +116,7 @@
             <div id="boss-hud" class="boss-hud hidden">
                 <div class="boss-avatar-wrap">
                     <span id="boss-avatar" class="boss-avatar">🧙‍♂️</span>
-                    <span class="boss-name">Dark Sorcerer</span>
+                    <span class="boss-name" data-i18n="bossName">Dark Sorcerer</span>
                 </div>
                 <div class="boss-hp-track">
                     <div id="boss-hp-fill" class="boss-hp-fill"></div>
@@ -148,13 +149,13 @@
                     <button id="spell-undo-btn" class="btn btn-spell-ctrl" title="Undo last letter">⌫</button>
                     <button id="spell-clear-btn" class="btn btn-spell-ctrl" title="Clear all">🗑️</button>
                 </div>
-                <input id="spelling-input" class="spelling-input" type="text" autocomplete="off" autocapitalize="characters" placeholder="or type here..." maxlength="20">
+                <input id="spelling-input" class="spelling-input" type="text" autocomplete="off" autocapitalize="characters" placeholder="or type here..." maxlength="20" data-i18n="spellPlaceholder">
             </div>
 
             <!-- Action Buttons -->
             <div class="action-row">
                 <button id="mic-btn" class="btn btn-mic" title="Speak letters">🎤</button>
-                <button id="submit-btn" class="btn btn-submit">✅ Submit</button>
+                <button id="submit-btn" class="btn btn-submit" data-i18n="submitBtn">✅ Submit</button>
                 <button id="game-lobby-btn" class="btn btn-lobby-sm" title="Back to Lobby">🏠</button>
             </div>
 
@@ -168,7 +169,7 @@
         <div id="complete-screen" class="screen">
             <div class="complete-container">
                 <div class="complete-trophy-anim">🏅</div>
-                <h2 class="complete-title">🎉 Level Complete!</h2>
+                <h2 class="complete-title" data-i18n="completeTitle">🎉 Level Complete!</h2>
                 <div id="stars-earned" class="stars-earned"></div>
                 <div class="complete-stats">
                     <p>Score: <strong><span id="level-score-value">0</span></strong></p>
@@ -180,8 +181,8 @@
                 <div class="complete-loot">
                     <span id="loot-item" class="loot-item"></span>
                 </div>
-                <button id="next-level-btn" class="btn btn-primary">Next Level ➜</button>
-                <button id="complete-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
+                <button id="next-level-btn" class="btn btn-primary" data-i18n="nextLevelBtn">Next Level ➜</button>
+                <button id="complete-lobby-btn" class="btn btn-lobby" data-i18n="lobbyBtn">🏠 Back to Lobby</button>
             </div>
         </div>
 
@@ -189,16 +190,16 @@
         <div id="victory-screen" class="screen">
             <div class="victory-container">
                 <div class="victory-fireworks">🎆 🎇 🎆</div>
-                <h1 class="victory-title">🏆 Victory! 🏆</h1>
+                <h1 class="victory-title" data-i18n="victoryTitle">🏆 Victory! 🏆</h1>
                 <div class="victory-hero">🦸</div>
-                <h2>The Kingdom is Saved!</h2>
+                <h2 data-i18n="victorySub">The Kingdom is Saved!</h2>
                 <p class="victory-text" id="victory-text">You defeated the Dark Sorcerer and restored all vowels to the Kingdom of Letters!</p>
                 <div class="final-stats">
                     <p>Final Score: <strong><span id="final-score">0</span></strong></p>
                     <p>Total Stars: <strong><span id="final-stars">0</span> / 9</strong></p>
                 </div>
-                <button id="play-again-btn" class="btn btn-primary">🔄 Play Again</button>
-                <button id="victory-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
+                <button id="play-again-btn" class="btn btn-primary" data-i18n="playAgainBtn">🔄 Play Again</button>
+                <button id="victory-lobby-btn" class="btn btn-lobby" data-i18n="lobbyBtn">🏠 Back to Lobby</button>
             </div>
         </div>
 
@@ -206,17 +207,18 @@
         <div id="gameover-screen" class="screen">
             <div class="gameover-container">
                 <div class="gameover-skull">💀</div>
-                <h1 class="gameover-title">Defeated!</h1>
-                <p class="gameover-text">The Dark Sorcerer's power was too great…</p>
-                <p class="gameover-sub">But a true knight never gives up!</p>
+                <h1 class="gameover-title" data-i18n="gameoverTitle">Defeated!</h1>
+                <p class="gameover-text" data-i18n="gameoverText">The Dark Sorcerer's power was too great…</p>
+                <p class="gameover-sub" data-i18n="gameoverSub">But a true knight never gives up!</p>
                 <p class="gameover-score">Score: <span id="gameover-score">0</span></p>
-                <button id="retry-btn" class="btn btn-primary">⚔️ Try Again</button>
-                <button id="back-map-btn" class="btn btn-secondary">🗺️ Back to Map</button>
-                <button id="gameover-lobby-btn" class="btn btn-lobby">🏠 Back to Lobby</button>
+                <button id="retry-btn" class="btn btn-primary" data-i18n="retryBtn">⚔️ Try Again</button>
+                <button id="back-map-btn" class="btn btn-secondary" data-i18n="backMapBtn">🗺️ Back to Map</button>
+                <button id="gameover-lobby-btn" class="btn btn-lobby" data-i18n="lobbyBtn">🏠 Back to Lobby</button>
             </div>
         </div>
     </div>
 
+    <script src="js/i18n.js"></script>
     <script src="js/questions.js"></script>
     <script src="js/game.js"></script>
 </body>

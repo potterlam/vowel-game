@@ -59,30 +59,7 @@
     levelQuestions: [],     // randomly picked questions for current level
   };
 
-  /* Companion messages */
-  const COMPANION_TIPS = {
-    vowel: [
-      "Remember: A, E, I, O, U!",
-      "Listen carefully to the word! 👂",
-      "Vowels make words sing! 🎵",
-      "You're doing great, knight! ⚔️",
-      "Tap the speaker to hear the word!",
-    ],
-    consonant: [
-      "All letters except A,E,I,O,U!",
-      "Listen for the hard sounds! 👂",
-      "Consonants are the bones of words!",
-      "You've unlocked the DLC! 🗡️",
-      "Tap the speaker to hear the word!",
-    ],
-    spelling: [
-      "Listen and type the whole word! ⌨️",
-      "Sound it out letter by letter!",
-      "You can do it, brave speller! 📝",
-      "Tap the speaker to hear it again!",
-      "Spelling masters rule the kingdom! 👑",
-    ],
-  };
+  /* Companion messages — now driven by i18n */
 
   /* ============================
      AUDIO — synthesized sounds
@@ -339,7 +316,7 @@
         btn.textContent = v;
         container.appendChild(btn);
       });
-      $("#panel-label").textContent = "Which vowels are in this word?";
+      $("#panel-label").textContent = t("panelVowel");
     } else {
       container.classList.add("consonant-mode");
       CONSONANTS.forEach(c => {
@@ -349,7 +326,7 @@
         btn.textContent = c;
         container.appendChild(btn);
       });
-      $("#panel-label").textContent = "Which consonants are in this word?";
+      $("#panel-label").textContent = t("panelCons");
     }
 
     // Attach click handlers
@@ -449,7 +426,7 @@
     const level = LEVELS.find(l => l.id === lvlId);
     if (!level) { showMapScreen(); return; }
     $("#story-character").textContent = level.emoji;
-    const full = level.introStory;
+    const full = tLevel(lvlId, "intro");
     const el = $("#story-text");
     el.textContent = "";
     let i = 0;
@@ -486,7 +463,7 @@
     $("#progress-fill").style.width = pct + "%";
     $("#progress-text").textContent = `${doneQ} / ${totalQ}`;
     $("#total-score").textContent = state.score;
-    $("#mode-badge-display").textContent = state.mode === "vowel" ? "🔤 Vowels Mode" : state.mode === "consonant" ? "🗡️ Consonants DLC" : "✏️ Spelling DLC";
+    $("#mode-badge-display").textContent = state.mode === "vowel" ? t("badgeVowel") : state.mode === "consonant" ? t("badgeCons") : t("badgeSpell");
 
     LEVELS.forEach(lvl => {
       const node = document.createElement("div");
@@ -509,8 +486,8 @@
       node.innerHTML = `
         <div class="level-emoji">${lvl.emoji}</div>
         <div class="level-info-text">
-          <h3>${lvl.id}. ${lvl.name}${lvl.isBoss ? " ⚡" : ""}</h3>
-          <p>${lvl.description}</p>
+          <h3>${lvl.id}. ${tLevel(lvl.id, "name")}${lvl.isBoss ? " ⚡" : ""}</h3>
+          <p>${tLevel(lvl.id, "desc")}</p>
         </div>
         <div class="level-stars">${starsHTML}</div>
       `;
@@ -535,11 +512,11 @@
     const letters = $("#word-letters");
     if (state.hintOn) {
       btn.classList.add("hint-on");
-      btn.querySelector(".hint-label").textContent = "Hide Word";
+      btn.querySelector(".hint-label").textContent = t("hintHide");
       letters.classList.remove("hidden-hint");
     } else {
       btn.classList.remove("hint-on");
-      btn.querySelector(".hint-label").textContent = "Show Word";
+      btn.querySelector(".hint-label").textContent = t("hintShow");
       letters.classList.add("hidden-hint");
     }
   }
@@ -554,7 +531,9 @@
      COMPANION FAIRY
      ============================ */
   function showCompanionTip() {
-    const tips = COMPANION_TIPS[state.mode] || COMPANION_TIPS.vowel;
+    const key = state.mode === "vowel" ? "companionVowel" : state.mode === "consonant" ? "companionCons" : "companionSpell";
+    const tips = t(key) || [];
+    if (!tips.length) return;
     const msg = tips[Math.floor(Math.random() * tips.length)];
     const el = $("#companion-msg");
     el.textContent = msg;
@@ -583,7 +562,7 @@
     buildLetterButtons();
 
     // HUD
-    $("#level-label").textContent = level.name;
+    $("#level-label").textContent = tLevel(lvlId, "name");
     updateLives();
     updateHintUI();
 
@@ -906,7 +885,7 @@
     spawnParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, 25, "#ffd700", 3, 5, 35);
     showScorePopup(pts, card);
 
-    showFeedback(true, `+${pts} points!`, q.hint);
+    showFeedback(true, `+${pts} ${t("pointsSuffix")}`, tHint(q));
 
     setTimeout(() => {
       state.currentQ++;
@@ -928,7 +907,7 @@
     card.style.animation = "shakeTile .4s";
     setTimeout(() => card.style.animation = "", 500);
 
-    showFeedback(false, "Not quite!", `The correct spelling is: ${correct}`);
+    showFeedback(false, t("feedbackWrong"), `${t("feedbackSpellAns")} ${correct}`);
 
     if (state.lives <= 0) {
       const level = LEVELS.find(l => l.id === state.currentLevel);
@@ -1026,7 +1005,7 @@
     spawnParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, 25, "#ffd700", 3, 5, 35);
     showScorePopup(pts, card);
 
-    showFeedback(true, `+${pts} points!`, q.hint);
+    showFeedback(true, `+${pts} ${t("pointsSuffix")}`, tHint(q));
 
     setTimeout(() => {
       state.currentQ++;
@@ -1071,8 +1050,8 @@
     setTimeout(() => card.style.animation = "", 500);
 
     const answerStr = [...correctSet].join(", ");
-    const label = state.mode === "vowel" ? "vowels" : state.mode === "consonant" ? "consonants" : "letters";
-    showFeedback(false, "Not quite!", `The ${label} are: ${answerStr}`);
+    const label = state.mode === "vowel" ? t("feedbackVowelAns") : state.mode === "consonant" ? t("feedbackConsAns") : t("feedbackLetterAns");
+    showFeedback(false, t("feedbackWrong"), `${label} ${answerStr}`);
 
     if (state.lives <= 0) {
       const level = LEVELS.find(l => l.id === state.currentLevel);
@@ -1188,7 +1167,7 @@
 
     $("#level-score-value").textContent = state.levelScore;
     $("#level-correct-value").textContent = state.levelCorrect;
-    $("#complete-story-text").textContent = lvl ? lvl.completeStory : "";
+    $("#complete-story-text").textContent = lvl ? tLevel(state.currentLevel, "complete") : "";
 
     // Loot item
     const lootEl = $("#loot-item");
@@ -1222,10 +1201,10 @@
     const totalStars = Object.values(state.stars).reduce((a, b) => a + b, 0);
     $("#final-stars").textContent = totalStars;
     const modeText = state.mode === "vowel"
-      ? "You defeated the Dark Sorcerer and restored all vowels to the Kingdom of Letters!"
+      ? t("victoryVowelText")
       : state.mode === "consonant"
-      ? "You defeated the Dark Sorcerer and restored all consonants to the Kingdom of Letters!"
-      : "You defeated the Dark Sorcerer by spelling every word perfectly! The Kingdom of Letters is saved!";
+      ? t("victoryConsText")
+      : t("victorySpellText");
     $("#victory-text").textContent = modeText;
     showScreen("victory");
   }
@@ -1428,9 +1407,38 @@
   ambientStars();
 
   /* ============================
+     LANGUAGE TOGGLE
+     ============================ */
+  function updateLangBtn() {
+    const btn = $("#lang-toggle");
+    if (btn) btn.textContent = currentLang === "en" ? "中" : "EN";
+  }
+
+  $("#lang-toggle").addEventListener("click", () => {
+    currentLang = currentLang === "en" ? "zh" : "en";
+    updateLangBtn();
+    refreshI18nDOM();
+    // Re-render active screen dynamic text
+    updateHintUI();
+    if (!screens.title.classList.contains("active")) {
+      // refresh map badge if on map
+      if (!screens.map.classList.contains("hidden") && screens.map.classList.contains("active")) {
+        renderMap();
+      }
+    }
+    localStorage.setItem("vowelquest_lang", currentLang);
+    SFX.select();
+  });
+
+  /* ============================
      INIT
      ============================ */
   function init() {
+    // Load language preference
+    const savedLang = localStorage.getItem("vowelquest_lang");
+    if (savedLang && I18N[savedLang]) currentLang = savedLang;
+    updateLangBtn();
+    refreshI18nDOM();
     initTitle();
     showScreen("title");
   }
