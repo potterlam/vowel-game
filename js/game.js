@@ -14,6 +14,7 @@
   /* ---------- Constants ---------- */
   const VOWELS = ["A", "E", "I", "O", "U"];
   const CONSONANTS = ["B","C","D","F","G","H","J","K","L","M","N","P","Q","R","S","T","V","W","X","Y","Z"];
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const Q_PER_LEVEL = 5;
   const MAX_LIVES = 3;
   const BOSS_TIMER = 90;
@@ -870,6 +871,7 @@
     // Reveal the word on answer
     $("#word-letters").classList.remove("hidden-hint");
 
+    const input = $("#spelling-input");
     if (isCorrect) {
       input.classList.add("spelling-correct");
       handleCorrectSpelling(q);
@@ -1294,7 +1296,6 @@
      Uses continuous mode + processes all
      alternatives + letter-by-letter parsing
      ============================ */
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let isListening = false;
 
