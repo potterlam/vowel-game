@@ -693,55 +693,72 @@
 
   /* ---------- Unified Speech Recognition (all modes) ---------- */
   const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+  /*
+   * Phonetic map: only CLEAR, UNAMBIGUOUS names for each letter.
+   * Removed short words like "BE","DE","PE" etc. that the engine
+   * returns as common English words causing false positives.
+   */
   const PHONETIC_MAP = {
-    "A": ["AY","LETTER A"],
-    "B": ["BEE","BE","LETTER B"],
-    "C": ["SEE","CE","SI","LETTER C"],
-    "D": ["DEE","DE","LETTER D"],
-    "E": ["EE","LETTER E"],
-    "F": ["EF","EFF","LETTER F"],
-    "G": ["GEE","JEE","LETTER G"],
-    "H": ["AITCH","ATCH","LETTER H"],
-    "I": ["EYE","LETTER I"],
-    "J": ["JAY","LETTER J"],
-    "K": ["KAY","LETTER K"],
-    "L": ["EL","ELL","LETTER L"],
-    "M": ["EM","LETTER M"],
-    "N": ["EN","LETTER N"],
-    "O": ["OH","LETTER O"],
-    "P": ["PEE","PE","LETTER P"],
-    "Q": ["CUE","QUE","QUEUE","LETTER Q"],
-    "R": ["ARE","AR","LETTER R"],
-    "S": ["ES","ESS","LETTER S"],
-    "T": ["TEE","TE","LETTER T"],
-    "U": ["YOU","YU","LETTER U"],
-    "V": ["VEE","VE","LETTER V"],
-    "W": ["DOUBLE U","DOUBLE YOU","LETTER W"],
-    "X": ["EX","LETTER X"],
-    "Y": ["WHY","WY","LETTER Y"],
-    "Z": ["ZEE","ZED","LETTER Z"],
+    "A": ["AY","LETTER A","THE LETTER A"],
+    "B": ["BEE","LETTER B","THE LETTER B"],
+    "C": ["SEE","CEE","LETTER C","THE LETTER C"],
+    "D": ["DEE","LETTER D","THE LETTER D"],
+    "E": ["LETTER E","THE LETTER E"],
+    "F": ["EF","EFF","LETTER F","THE LETTER F"],
+    "G": ["GEE","JEE","LETTER G","THE LETTER G"],
+    "H": ["AITCH","ATCH","LETTER H","THE LETTER H","EACH","ACHE"],
+    "I": ["EYE","LETTER I","THE LETTER I"],
+    "J": ["JAY","LETTER J","THE LETTER J"],
+    "K": ["KAY","LETTER K","THE LETTER K"],
+    "L": ["ELL","LETTER L","THE LETTER L"],
+    "M": ["LETTER M","THE LETTER M"],
+    "N": ["LETTER N","THE LETTER N"],
+    "O": ["LETTER O","THE LETTER O"],
+    "P": ["PEE","LETTER P","THE LETTER P"],
+    "Q": ["CUE","QUEUE","LETTER Q","THE LETTER Q"],
+    "R": ["ARE","OUR","LETTER R","THE LETTER R"],
+    "S": ["ESS","LETTER S","THE LETTER S"],
+    "T": ["TEE","LETTER T","THE LETTER T"],
+    "U": ["YOU","YEW","LETTER U","THE LETTER U"],
+    "V": ["VEE","LETTER V","THE LETTER V"],
+    "W": ["DOUBLE U","DOUBLE YOU","DOUBLE","LETTER W","THE LETTER W"],
+    "X": ["LETTER X","THE LETTER X"],
+    "Y": ["WHY","LETTER Y","THE LETTER Y"],
+    "Z": ["ZEE","ZED","LETTER Z","THE LETTER Z"],
   };
+
+  /* Words that should NOT be split into individual letters */
+  const STOP_WORDS = new Set([
+    "THE","AND","FOR","BUT","NOT","THIS","THAT","WITH","FROM",
+    "HIS","HER","HAS","HAD","WAS","ARE","WAS","WERE","BEEN",
+    "HAVE","WILL","CAN","ALL","ITS","GOT","LET","SAY","MAY",
+    "NOW","OLD","NEW","WAY","DAY","DID","GET","HIM","HOW",
+    "MAN","OUR","OUT","USE","HER","TWO","BOY","ITS","SAY",
+    "SHE","TOO","ANY","WHO","OIL","SIT","RUN","HOT","EAT",
+    "FAR","END","TRY","ASK","MEN","RAN","OFF","RED","BIG",
+    "FEW","SET","PUT","OWN","AGE","BOX","TOP","ROW","ACE",
+  ]);
 
   /**
    * Parse ALL letters from speech transcript.
-   * Handles: "C A T", "see ay tee", "CAT", single letters, phonetic names.
-   * Returns an array of detected uppercase letters in order.
+   * Priority: single letter tokens > phonetic names > word-as-spelling (spelling mode only)
    */
-  function parseLettersFromSpeech(allText) {
-    // Try each alternative transcript separately, pick the one that yields the most letters
+  function parseLettersFromSpeech(allText, forSpellingMode) {
     let bestResult = [];
 
     for (const text of allText) {
       const detected = [];
-      const tokens = text.replace(/[,.\-!?']/g, " ").split(/\s+/).filter(Boolean);
+      const tokens = text.replace(/[,.\-!?'":;()]/g, " ").split(/\s+/).filter(Boolean);
 
       for (const token of tokens) {
-        // Exact single letter
+        // 1. Exact single letter (highest priority)
         if (token.length === 1 && ALL_LETTERS.includes(token)) {
           detected.push(token);
           continue;
         }
-        // Phonetic name match (exact token match)
+
+        // 2. Phonetic name match (exact token)
         let found = false;
         for (const letter of ALL_LETTERS) {
           const phonetics = PHONETIC_MAP[letter] || [];
@@ -752,11 +769,9 @@
           }
         }
         if (found) continue;
-        // Two-letter token that could be a letter name the engine glued together
-        // e.g. "AB" when user said "A B" — only split if len 2-3
-        if (token.length >= 2 && token.length <= 3 && /^[A-Z]+$/.test(token)) {
-          for (const ch of token) detected.push(ch);
-        }
+
+        // 3. Skip common English words — don't split these
+        // (they are NOT letter names, the engine just heard filler words)
       }
 
       if (detected.length > bestResult.length) {
@@ -764,13 +779,15 @@
       }
     }
 
-    // Fallback: if nothing found yet, try treating the entire combined text
-    // as individual characters (for when engine returns e.g. "CAT" as one word)
-    if (bestResult.length === 0) {
-      const combined = allText.join(" ");
-      const tokens = combined.replace(/[^A-Z]/g, "");
-      if (tokens.length >= 1 && tokens.length <= 15) {
-        for (const ch of tokens) bestResult.push(ch);
+    // Fallback for spelling mode: if the engine heard the whole word
+    // (e.g. user said "bird" and engine returned "bird"), use it directly
+    if (forSpellingMode && bestResult.length === 0) {
+      for (const text of allText) {
+        const clean = text.replace(/[^A-Z]/g, "");
+        if (clean.length >= 2 && clean.length <= 15 && !STOP_WORDS.has(clean)) {
+          bestResult = clean.split("");
+          break;
+        }
       }
     }
 
@@ -784,15 +801,14 @@
     if (!letters.length || state.answered) return;
 
     if (state.mode === "spelling") {
-      // Add all detected letters to spelling tiles
       if (!state.spelledLetters) state.spelledLetters = [];
       letters.forEach(l => state.spelledLetters.push(l));
       renderSpellingTiles();
       SFX.select();
     } else {
-      // Vowel / Consonant mode — select matching buttons
       const targetPool = state.mode === "vowel" ? VOWELS : CONSONANTS;
-      letters.forEach(letter => {
+      const unique = new Set(letters); // de-dupe
+      unique.forEach(letter => {
         if (targetPool.includes(letter)) {
           state.selectedLetters.add(letter);
           const btn = $(`.vowel-btn[data-letter="${letter}"]`);
@@ -823,9 +839,10 @@
           allText.push(e.results[i][j].transcript.toUpperCase().trim());
         }
       }
-      console.log("[Speech] transcripts:", allText);
-      const letters = parseLettersFromSpeech(allText);
-      console.log("[Speech] detected letters:", letters);
+      console.log("[Speech] raw transcripts:", JSON.stringify(allText));
+      const isSpelling = state.mode === "spelling";
+      const letters = parseLettersFromSpeech(allText, isSpelling);
+      console.log("[Speech] detected letters:", JSON.stringify(letters));
       handleDetectedLetters(letters);
       stopListening();
     });
