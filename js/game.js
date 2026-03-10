@@ -97,6 +97,111 @@
   };
 
   /* ============================
+     BGM — synthesized background music
+     Fantasy castle arpeggio loop
+     ============================ */
+  const BGM = (() => {
+    let bgmGain = null;         // master gain node for BGM
+    let bgmInterval = null;     // scheduling timer
+    let bgmPlaying = false;
+    let bgmVolume = 0.07;       // soft default (0-1)
+    let currentMood = "title";  // "title" | "game" | "boss"
+
+    // Musical scales (note frequencies in Hz)
+    // C major pentatonic with octave variations for magical feel
+    const MOODS = {
+      title: {
+        notes: [262,294,330,392,440, 523,587,659,784,880],  // C4-A5 pentatonic
+        tempo: 280,    // ms per note
+        type: "sine",
+        pattern: [0,2,4,7,9, 7,4,2, 0,4,7,9,7,4,2,0], // arpeggio up-down
+      },
+      game: {
+        notes: [330,392,440,523,587, 659,784,880],           // E4-A5
+        tempo: 220,
+        type: "triangle",
+        pattern: [0,2,4,6,7, 6,4,2, 0,1,3,5,7,5,3,1],
+      },
+      boss: {
+        notes: [220,262,294,330,392,440,523],                // A3-C5 minor feel
+        tempo: 180,
+        type: "sawtooth",
+        pattern: [0,3,5,6, 5,3,0,1, 3,5,6,5, 3,1,0,2],
+      },
+    };
+
+    let noteIndex = 0;
+
+    function scheduleNote() {
+      if (!bgmPlaying || !state.soundOn || !audioCtx) return;
+      const mood = MOODS[currentMood] || MOODS.title;
+      const idx = mood.pattern[noteIndex % mood.pattern.length];
+      const freq = mood.notes[idx % mood.notes.length];
+
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const t = audioCtx.currentTime;
+
+        osc.type = mood.type;
+        osc.frequency.setValueAtTime(freq, t);
+
+        // Soft envelope: fade in, sustain, fade out
+        const noteDur = mood.tempo / 1000 * 0.9;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(bgmVolume, t + 0.02);
+        gain.gain.setValueAtTime(bgmVolume, t + noteDur * 0.6);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + noteDur);
+
+        // Connect through master gain
+        if (!bgmGain) {
+          bgmGain = audioCtx.createGain();
+          bgmGain.connect(audioCtx.destination);
+        }
+        bgmGain.gain.value = 1;
+        osc.connect(gain).connect(bgmGain);
+        osc.start(t);
+        osc.stop(t + noteDur + 0.05);
+      } catch (_) {}
+
+      noteIndex++;
+    }
+
+    return {
+      play(mood) {
+        if (mood) currentMood = mood;
+        if (bgmPlaying) { this.setMood(mood || currentMood); return; }
+        ensureAudio();
+        bgmPlaying = true;
+        noteIndex = 0;
+        const tempo = () => (MOODS[currentMood] || MOODS.title).tempo;
+        // Use dynamic interval that adapts to mood tempo
+        const loop = () => {
+          if (!bgmPlaying) return;
+          scheduleNote();
+          bgmInterval = setTimeout(loop, tempo());
+        };
+        loop();
+      },
+      stop() {
+        bgmPlaying = false;
+        if (bgmInterval) { clearTimeout(bgmInterval); bgmInterval = null; }
+        noteIndex = 0;
+      },
+      setMood(mood) {
+        currentMood = mood;
+        noteIndex = 0; // restart pattern for new mood
+      },
+      setVolume(v) {
+        bgmVolume = Math.max(0, Math.min(1, v));
+        if (bgmGain) bgmGain.gain.value = bgmVolume > 0 ? 1 : 0;
+      },
+      getVolume() { return bgmVolume; },
+      isPlaying() { return bgmPlaying; },
+    };
+  })();
+
+  /* ============================
      TEXT-TO-SPEECH
      ============================ */
   function speakWord(word) {
@@ -213,6 +318,19 @@
   function showScreen(name) {
     Object.values(screens).forEach(s => s.classList.remove("active"));
     screens[name].classList.add("active");
+
+    // BGM mood changes per screen
+    if (state.soundOn) {
+      if (name === "title" || name === "map" || name === "story" ||
+          name === "complete" || name === "victory") {
+        BGM.play("title");
+      } else if (name === "game") {
+        // Boss mood is set separately in startLevel
+        BGM.play("game");
+      } else if (name === "gameover") {
+        BGM.stop();
+      }
+    }
   }
 
   /* ============================
@@ -397,6 +515,7 @@
   $("#start-btn").addEventListener("click", () => {
     ensureAudio();
     SFX.select();
+    if (state.soundOn) BGM.play("title");
     resetProgress();
     state.currentLevel = 1;
     showStoryForLevel(1);
@@ -405,6 +524,7 @@
   $("#continue-btn").addEventListener("click", () => {
     ensureAudio();
     SFX.select();
+    if (state.soundOn) BGM.play("title");
     showMapScreen();
   });
 
@@ -412,7 +532,13 @@
     state.soundOn = !state.soundOn;
     updateSoundBtn();
     saveProgress();
-    if (state.soundOn) { ensureAudio(); SFX.select(); }
+    if (state.soundOn) {
+      ensureAudio();
+      SFX.select();
+      BGM.play("title");
+    } else {
+      BGM.stop();
+    }
   });
 
   /* ============================
@@ -578,6 +704,8 @@
     }
 
     showScreen("game");
+    // Switch to boss BGM for boss levels
+    if (level.isBoss) BGM.setMood("boss");
     showCompanionTip();
     loadQuestion();
   }
@@ -1225,6 +1353,24 @@
     localStorage.setItem("vowelquest_lang", currentLang);
     SFX.select();
   });
+
+  /* ============================
+     BGM VOLUME SLIDER
+     ============================ */
+  const bgmSlider = $("#bgm-slider");
+  if (bgmSlider) {
+    bgmSlider.addEventListener("input", () => {
+      const v = parseInt(bgmSlider.value, 10) / 100;
+      BGM.setVolume(v);
+      localStorage.setItem("vowelquest_bgm_vol", bgmSlider.value);
+    });
+    // Restore saved volume
+    const savedVol = localStorage.getItem("vowelquest_bgm_vol");
+    if (savedVol !== null) {
+      bgmSlider.value = savedVol;
+      BGM.setVolume(parseInt(savedVol, 10) / 100);
+    }
+  }
 
   /* ============================
      INIT
