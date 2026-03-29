@@ -233,50 +233,40 @@ const VoiceInput = (() => {
     rec.interimResults = true;
     rec.maxAlternatives = 5;
 
-    // Dedup: track the last letter+time we fired so rapid interim
-    // updates for the same utterance don't toggle twice
-    let lastFired = "";       // last letter string we sent
-    let lastFiredAt = 0;      // timestamp
-    const DEDUP_MS = 800;     // ignore same letter within this window
-    let lastInterimText = ""; // avoid re-processing identical interim text
+    // Track which letters we've already fired for the current segment
+    // so growing transcripts ("I" → "I India" → "I India hi") only
+    // fire "I" once, not three times.
+    const firedLetters = new Set();
 
     rec.onresult = (event) => {
-      // Process ALL results — use the latest one
       const latest = event.results[event.results.length - 1];
       if (!latest || latest.length === 0) return;
 
-      const transcript = latest[0].transcript;
       const isFinal = latest.isFinal;
 
-      // Skip if the interim text hasn't changed
-      if (!isFinal && transcript === lastInterimText) return;
-      lastInterimText = transcript;
-
-      // Collect alternatives
+      // Collect alternatives for this segment
       const alts = [];
       for (let j = 0; j < latest.length; j++) {
         alts.push(latest[j].transcript);
       }
 
-      // Try each alternative
+      // Parse all alternatives, merge letters
+      const allLetters = new Set();
       for (const t of alts) {
-        const letters = parseLetters(t);
-        if (letters.length > 0) {
-          const key = letters.join(",");
-          const now = Date.now();
-
-          // Dedup: don't fire same letter again within DEDUP_MS
-          if (key === lastFired && now - lastFiredAt < DEDUP_MS) break;
-
-          console.log("[Voice]", isFinal ? "FINAL" : "interim",
-            JSON.stringify(t), "→", letters.join(","));
-
-          lastFired = key;
-          lastFiredAt = now;
-          if (resultCallback) resultCallback(letters, currentMode);
-          break;
-        }
+        for (const l of parseLetters(t)) allLetters.add(l);
       }
+
+      // Only fire letters we haven't already fired for this segment
+      const newLetters = [...allLetters].filter(l => !firedLetters.has(l));
+      if (newLetters.length > 0) {
+        newLetters.forEach(l => firedLetters.add(l));
+        console.log("[Voice]", isFinal ? "FINAL" : "interim",
+          JSON.stringify(alts[0]), "→", newLetters.join(","));
+        if (resultCallback) resultCallback(newLetters, currentMode);
+      }
+
+      // On final, reset tracking for next utterance
+      if (isFinal) firedLetters.clear();
     };
 
     rec.onend = () => {

@@ -77,7 +77,7 @@
     utter.lang = "en-US";
     utter.rate = 0.85;
     utter.pitch = 1.0;
-    utter.volume = state.soundOn ? 1 : 0;
+    utter.volume = 1;  // TTS always audible, independent of BGM/SFX mute
     const btn = $("#tts-btn");
     btn.classList.add("speaking");
     utter.onend = () => btn.classList.remove("speaking");
