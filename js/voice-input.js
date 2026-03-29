@@ -28,160 +28,321 @@ const VoiceInput = (() => {
      PRONUNCIATION MAP — spoken sound → uppercase letter
      The Web Speech API returns full English words for short
      utterances, so we map every common transcription variant.
+     Covers: exact letter, phonetic name, NATO alphabet, rhymes,
+     common mishears, homophones, short phrases, and words that
+     start with the target sound.
      -------------------------------------------------------- */
   const LETTER_MAP = {};
   function addMap(letter, variants) {
     variants.forEach(v => { LETTER_MAP[v.toLowerCase()] = letter; });
   }
 
-  // ── Vowels (extensive — these are the hardest to detect) ──
+  // ── Vowels ──
   addMap("A", [
-    "a","ay","aye","eh","hey","alpha","ah","aay","eight","ate",
-    "aim","age","ace","ape","aid","ale","hay","ha","huh",
-    "ei","ey","they","say","way","day","may","pay","ray","bay",
-    "play","pray","stay","grey","gray","lay","jay","nay","yay",
-    "weigh","weight","wait","late","fate","gate","hate","rate",
-    "name","fame","came","game","same","make","take","bake","cake",
-    "lake","wake","shake","stake","grade","made","save","gave",
-    "a.","letter a",
+    // Core
+    "a","ay","aye","eh","hey","ah","ha","aah","aaa",
+    // NATO / phonetic
+    "alpha","alfa",
+    // Homophones & mishears
+    "eight","ate","hey","hay",
+    // Common words API returns for "A" sound
+    "aim","age","ace","ape","aid","ale","air","arc","art","ask","add","apt","axe",
+    "bay","day","fay","gay","hay","jay","kay","lay","may","nay","pay","ray","say","way","yay",
+    "play","pray","stay","grey","gray","slay","clay","fray","tray","spray","stray","sway",
+    // Long-A words
+    "wait","late","fate","gate","hate","rate","date","mate","plate","state","great","skate",
+    "name","fame","came","game","same","make","take","bake","cake","lake","wake","fake","sake",
+    "shake","stake","grade","made","save","gave","wave","brave","grave","slave","shave",
+    "face","place","race","space","trace","grace","base","case","chase","phase",
+    "rain","pain","gain","main","brain","train","chain","plain","drain","grain","strain","spain",
+    "tail","fail","mail","nail","rail","sail","jail","trail","snail",
+    "weigh","weight","they","obey","okay","today","away","delay","display","essay","hooray",
+    // Short sounds
+    "at","an","as","am","and","ant","app","apple","animal","answer","angry","angel",
+    "a.","letter a","the letter a",
   ]);
   addMap("E", [
-    "e","ee","eee","echo","he","she","we","me","be","the",
-    "eat","each","ease","east","ear","eel","eve","even",
-    "eagle","eager","era","equal","evil",
-    "free","tree","three","see","fee","knee","key","pee","tea","flee",
-    "bee","dee","gee","lee","tee","wee","plea",
-    "seed","feed","need","reed","deed","weed","speed","bleed","breed",
-    "deep","keep","sleep","sheep","sweep","creep","steep",
-    "sea","pea","flea","deal","real","meal","seal","heal","steal",
-    "mean","lean","clean","bean","dean","jean",
-    "sheet","meet","feet","sweet","street","beat","heat","seat","neat",
-    "ye","yea","yeah","yee","year","easy","email","emoji",
-    "e.","letter e",
+    // Core
+    "e","ee","eee","eh","he","she","we","me","be","the",
+    // NATO / phonetic
+    "echo",
+    // Homophones & mishears
+    "ye","yea","yeah","yee","yi",
+    // Common words API returns for "E" sound
+    "eat","each","ease","east","ear","eel","eve","even","ever","every","evil","era","equal",
+    "eagle","eager","early","earth","easy","edge","else","end","enter","email","emoji","empty",
+    // Long-EE words
+    "free","tree","three","see","fee","knee","key","pee","tea","flee","agree","degree",
+    "bee","dee","gee","lee","tee","wee","plea","flea","sea","pea",
+    "seed","feed","need","reed","deed","weed","speed","bleed","breed","greed","steed",
+    "deep","keep","sleep","sheep","sweep","creep","steep","jeep","beep","peep","seep","weep",
+    "deal","real","meal","seal","heal","steal","feel","heel","peel","reel","steel","wheel",
+    "mean","lean","clean","bean","dean","jean","green","screen","queen","keen","seen","teen",
+    "sheet","meet","feet","sweet","street","beat","heat","seat","neat","treat","wheat","cheat",
+    "leaf","leaf","beach","reach","teach","peach","leach",
+    "dream","cream","stream","team","beam","steam","gleam",
+    "brief","chief","thief","piece","peace","feast","least","beast","priest",
+    "ski","debris",
+    // Short-E words
+    "bed","red","led","fed","shed","bread","head","dead","said","read","thread","spread",
+    "set","get","let","met","net","pet","wet","bet","jet","yet","vet",
+    "best","rest","test","west","nest","chest","quest","guest","fest","vest",
+    "bell","cell","dell","fell","hell","sell","tell","well","yell","shell","spell","smell","dwell",
+    "ten","pen","hen","den","men","then","when","blend","trend","friend","spend",
+    "e.","letter e","the letter e",
   ]);
   addMap("I", [
-    "i","eye","ai","india","hi","high","buy","by","my","tie","die",
-    "lie","pie","guy","fly","try","cry","dry","fry","sky","spy","shy",
-    "why","sigh","thigh",
-    "ice","eyes","I'm","I'll","aisle","isle","iron",
-    "night","right","light","sight","might","fight","tight","knight",
-    "like","bike","hike","mike","strike","spike",
-    "time","dime","lime","mine","fine","line","nine","wine","vine","pine",
-    "side","hide","ride","wide","guide","pride","slide","bride",
-    "five","dive","drive","live","alive","arrive",
-    "white","write","quite","bite","kite","site","lite",
-    "i.","letter i",
+    // Core
+    "i","eye","aye","hi","high",
+    // NATO / phonetic
+    "india",
+    // Homophones & mishears
+    "ai","i'm","i'll","i've","i'd",
+    // Common words API returns for "I" sound
+    "ice","eyes","isle","aisle","iron","idea","item","ivory","ivy","idle",
+    // Long-I words (say "I" and API hears these)
+    "buy","by","my","tie","die","lie","pie","guy","fly","try","cry","dry","fry","sky","spy","shy",
+    "sigh","thigh","apply","reply","supply","deny","rely","comply","imply","ally","july",
+    "night","right","light","sight","might","fight","tight","knight","bright","flight","fright","slight","height",
+    "like","bike","hike","mike","strike","spike","hike",
+    "time","dime","lime","mine","fine","line","nine","wine","vine","pine","dine","sign","shine","spine","divine","combine",
+    "side","hide","ride","wide","guide","pride","slide","bride","tide","stride","provide","decide","inside","outside",
+    "five","dive","drive","live","alive","arrive","thrive","survive",
+    "white","write","quite","bite","kite","site","lite","spite","invite","polite","ignite","excite","recite",
+    "life","wife","knife","strife",
+    "fire","hire","wire","tire","desire","inspire","require","admire",
+    "mile","smile","while","file","tile","pile","style","aisle",
+    "kind","mind","find","wind","blind","behind","remind","grind",
+    "type","pipe","ripe","wipe","swipe","stripe",
+    "nice","price","rice","dice","mice","twice","slice","spice","advice","device",
+    "child","wild","mild",
+    "climb","island",
+    // Short-I words
+    "bit","sit","fit","hit","kit","lit","pit","wit","grit","spit","quit","knit","split",
+    "big","dig","fig","pig","rig","wig","gig","jig","twig",
+    "bill","fill","hill","kill","mill","pill","will","till","still","skill","drill","grill","thrill","chill","spill",
+    "win","bin","din","fin","gin","pin","sin","tin","thin","chin","grin","spin","twin","begin","within",
+    "is","it","if","in","his","this","did","hid","kid","lid","bid","rid","grid","slid",
+    "dish","fish","wish","rich","which","pitch","switch","ditch","stitch",
+    "i.","letter i","the letter i",
   ]);
   addMap("O", [
-    "o","oh","ooh","oooh","ohhh","oscar","owe","eau",
-    "awe","or","all","on","own","old","only","over",
-    "go","no","so","low","know","show","flow","grow","blow","slow","snow",
-    "throw","glow", "row","bow","tow","mow","sow",
-    "home","bone","tone","zone","cone","phone","stone","alone",
-    "note","vote","quote","wrote","code","mode","node","rode","role","hole",
-    "hope","rope","cope","pope","slope",
-    "open","ocean","omit",
-    "oak","oat","oath","oil",
-    "o.","letter o","zero","whoa",
+    // Core
+    "o","oh","ooh","oooh","ohhh","ow",
+    // NATO / phonetic
+    "oscar",
+    // Homophones & mishears
+    "owe","eau","awe","whoa","yo",
+    // Common words API returns for "O" sound
+    "or","on","own","old","only","over","oak","oat","oath","oil","open","ocean","omit","orange","order","other",
+    // Long-O words
+    "go","no","so","low","know","show","flow","grow","blow","slow","snow","throw","glow","crow","row","bow","tow","mow","sow",
+    "toe","foe","hoe","joe","doe","woe","roe","aloe",
+    "home","bone","tone","zone","cone","phone","stone","alone","throne","clone","drone","ozone","postpone",
+    "note","vote","quote","wrote","code","mode","node","rode","role","hole","pole","sole","whole","stole","mole","goal",
+    "hope","rope","cope","pope","slope","scope","elope",
+    "nose","rose","chose","close","those","pose","dose","froze","prose",
+    "joke","broke","spoke","stroke","smoke","woke","poke","coke","choke","folk",
+    "road","load","toad",
+    "boat","coat","goat","float","throat",
+    "cold","gold","hold","bold","fold","told","sold","old","mold","scold",
+    "most","post","host","ghost","coast","toast","roast","boast",
+    "both","cloth",
+    "door","floor","four","pour","more","core","bore","sore","store","score","shore","ignore","explore","before",
+    "zero","hero","below","follow","yellow","window","elbow","shadow","pillow","hollow","borrow","tomorrow",
+    // Short-O words
+    "hot","not","got","lot","pot","dot","rot","shot","spot","slot","knot","plot","trot",
+    "box","fox","rock","lock","clock","block","knock","shock","stock","sock","dock","mock",
+    "top","pop","stop","drop","hop","cop","shop","crop","chop","prop","flop",
+    "dog","fog","log","frog","blog","jog",
+    "off","soft","lost","cost","cross","boss","toss","moss","frost",
+    "o.","letter o","the letter o",
   ]);
   addMap("U", [
-    "u","you","yu","ew","uniform","yoo","yew",
-    "who","hue","new","few","view","due","sue","true","blue","clue","glue",
-    "grew","drew","flew","knew","blew","threw","crew","brew","stew",
-    "use","used","user","huge","cube","tube","cute","mute","duke","rule",
-    "rude","dude","nude","mood","food","cool","pool","tool","school","fool",
-    "room","moon","soon","noon","spoon","bloom","broom","groom","zoom",
-    "too","two","do","to","shoe","move","prove","lose","choose",
-    "you're","your","youth",
-    "u.","letter u","ooh","oo",
+    // Core
+    "u","you","yu","ew","oo","ooh",
+    // NATO / phonetic
+    "uniform",
+    // Homophones & mishears
+    "yoo","yew","ewe","who","hue","queue","cue",
+    // Common words API returns for "U" sound
+    "use","used","user","us","up","under","until","upon","unit","union","unique","universe","university",
+    // Long-U / OO words
+    "new","few","view","due","sue","true","blue","clue","glue","pursue","review","issue","value","argue","continue",
+    "grew","drew","flew","knew","blew","threw","crew","brew","stew","chew","screw",
+    "huge","cube","tube","cute","mute","duke","rule","rude","dude","nude","crude","prude","lude","include","exclude",
+    "mood","food","cool","pool","tool","school","fool","drool","spool","stool",
+    "room","moon","soon","noon","spoon","bloom","broom","groom","zoom","boom","doom","loom","gloom","mushroom",
+    "too","two","do","to","who","shoe","move","prove","lose","choose","approve","improve","remove","groove",
+    "fruit","suit","juice","cruise","bruise","recruit",
+    "truth","youth","tooth","smooth","booth","roof","proof","hoof","goof","spoof","aloof",
+    "loop","soup","group","troop","scoop","swoop","stoop","droop",
+    "you're","your","you'd","you'll","you've",
+    // Short-U words
+    "but","cut","gut","hut","jut","nut","put","rut","shut","strut",
+    "bug","dug","hug","jug","mug","rug","tug","plug","slug","drug","shrug","snug",
+    "bus","fuss","plus","thus","must","just","dust","gust","rust","trust","crust","adjust",
+    "fun","gun","nun","pun","run","sun","bun","done","none","one","won","son","ton","stun","spun",
+    "cup","pup","sup","up",
+    "luck","duck","muck","puck","suck","tuck","truck","stuck","struck","pluck","chuck",
+    "bump","dump","hump","jump","lump","pump","stump","trump","clump","grump",
+    "lunch","bunch","punch","crunch","munch",
+    "u.","letter u","the letter u",
   ]);
 
   // ── Consonants ──
   addMap("B", [
-    "b","be","bee","bravo","beat","beef","bead","bean","beach","beam",
-    "beer","beard","beast","bees","beep","beet","being",
-    "b.","letter b",
+    // Core & phonetic
+    "b","be","bee","bravo",
+    // Homophones
+    "bead","bean","beach","beam","bear","beat","beef","beer","beard","beast","bees","beep","beet","being",
+    "boy","ball","bat","bad","bag","ban","bar","bed","bell","belt","bench","bend","best","bet","bid","big",
+    "bill","bird","black","blade","blame","blank","blast","blend","bless","blind","block","blood","blow","board",
+    "b.","letter b","the letter b",
   ]);
   addMap("C", [
-    "c","see","sea","charlie","si","ce","seed","seen","seal","seat",
-    "seem","seek","seize","scene","screen","seeing","seeing",
-    "c.","letter c",
+    // Core & phonetic
+    "c","see","sea","charlie",
+    // Homophones & mishears
+    "si","ce","seed","seen","seal","seat","seem","seek","seize","scene","screen","seeing",
+    "cedar","ceiling","cellar","center","central","certain","cease","celebrate",
+    "c.","letter c","the letter c",
   ]);
   addMap("D", [
-    "d","dee","delta","deal","dean","dear","deep","deed","deem","deer",
-    "d.","letter d",
+    // Core & phonetic
+    "d","dee","delta",
+    // Homophones
+    "deal","dean","dear","deep","deed","deem","deer","degree",
+    "d.","letter d","the letter d",
   ]);
   addMap("F", [
-    "f","ef","eff","foxtrot","if","off","half",
-    "f.","letter f",
+    // Core & phonetic
+    "f","ef","eff","foxtrot",
+    // Homophones & mishears
+    "if","off","half","Jeff","deaf","chef","shelf","self",
+    "effort","effect","after",
+    "f.","letter f","the letter f",
   ]);
   addMap("G", [
-    "g","gee","jee","golf","geek","gene","genie","jeep",
-    "g.","letter g",
+    // Core & phonetic
+    "g","gee","jee","golf",
+    // Homophones
+    "geek","gene","genie","jeep","genius","gentle","general","geography",
+    "g.","letter g","the letter g",
   ]);
   addMap("H", [
-    "h","aitch","hotel","age","ach","ache","each","8",
-    "h.","letter h","edge","etch","ash","h8",
+    // Core & phonetic
+    "h","aitch","hotel",
+    // Homophones & mishears
+    "ach","ache","age","each","8","h8",
+    "edge","etch","ash","hatch","match","catch","latch","patch","watch",
+    "h.","letter h","the letter h",
   ]);
   addMap("J", [
-    "j","jay","juliet","jade","jail","jane","james","jake","jam",
-    "j.","letter j",
+    // Core & phonetic
+    "j","jay","juliet",
+    // Homophones
+    "jade","jail","jane","james","jake","jam","jar","jazz","jet","job","join","joke","joy","judge","jump",
+    "j.","letter j","the letter j",
   ]);
   addMap("K", [
-    "k","kay","kilo","okay","ok","kate","cake",
-    "k.","letter k","que","kei",
+    // Core & phonetic
+    "k","kay","kilo",
+    // Homophones & mishears
+    "okay","ok","kate","cake","keep","keen","kick","kid","kill","kind","king","kiss","kite","knit","know",
+    "que","kei",
+    "k.","letter k","the letter k",
   ]);
   addMap("L", [
-    "l","el","ell","lima","ale","all","else","elf","elm","elbow",
-    "l.","letter l",
+    // Core & phonetic
+    "l","el","ell","lima",
+    // Homophones
+    "ale","all","else","elf","elm","elbow","elegant","element","elephant","eleven","elevator","elite",
+    "l.","letter l","the letter l",
   ]);
   addMap("M", [
-    "m","em","mike","am","aim","elm","arm","um",
-    "m.","letter m",
+    // Core & phonetic
+    "m","em","mike",
+    // Homophones & mishears
+    "am","aim","elm","arm","um","mmm","hmm",
+    "m.","letter m","the letter m",
   ]);
   addMap("N", [
-    "n","en","november","an","in","and","end","inn",
-    "n.","letter n",
+    // Core & phonetic
+    "n","en","november",
+    // Homophones & mishears
+    "an","in","and","end","inn","any","engine","enter","enjoy","enough","enemy","energy","entire","envelope",
+    "n.","letter n","the letter n",
   ]);
   addMap("P", [
-    "p","pee","papa","pe","pea","peak","peace","peel","peep","peer",
-    "p.","letter p",
+    // Core & phonetic
+    "p","pee","papa",
+    // Homophones
+    "pe","pea","peak","peace","peel","peep","peer","people","period","person","piece",
+    "p.","letter p","the letter p",
   ]);
   addMap("Q", [
-    "q","queue","cue","quebec","cute","cube",
-    "q.","letter q","kyu",
+    // Core & phonetic
+    "q","queue","cue","quebec",
+    // Homophones
+    "cute","cube","kyu","q-tip","quest","question","quick","quiet","quite","quiz",
+    "q.","letter q","the letter q",
   ]);
   addMap("R", [
-    "r","are","ar","romeo","our","or","err","her",
-    "r.","letter r",
+    // Core & phonetic
+    "r","are","ar","romeo",
+    // Homophones & mishears
+    "our","or","err","her","art","ark","arm","arch","argue",
+    "r.","letter r","the letter r",
   ]);
   addMap("S", [
-    "s","es","sierra","as","ass","ace","ice",
-    "s.","letter s",
+    // Core & phonetic
+    "s","es","sierra",
+    // Homophones & mishears
+    "as","ass","ace","ice","yes","guess","less","mess","dress","press","stress","bless","excess",
+    "s.","letter s","the letter s",
   ]);
   addMap("T", [
-    "t","tee","tea","tango","te","teen","team","teeth","teal","tear",
-    "t.","letter t",
+    // Core & phonetic
+    "t","tee","tea","tango",
+    // Homophones
+    "te","teen","team","teeth","teal","tear","teach","teacher",
+    "t.","letter t","the letter t",
   ]);
   addMap("V", [
-    "v","vee","victor","ve","vie","via",
-    "v.","letter v",
+    // Core & phonetic
+    "v","vee","victor",
+    // Homophones & mishears
+    "ve","vie","via","very","voice","van","vet","vine","visa","visit","vote","vow",
+    "v.","letter v","the letter v",
   ]);
   addMap("W", [
-    "w","double u","double you","whiskey","doubleyou","dub",
-    "w.","letter w",
+    // Core & phonetic
+    "w","double u","double you","whiskey","doubleyou",
+    // Homophones
+    "dub","double","w.","letter w","the letter w",
   ]);
   addMap("X", [
-    "x","ex","x-ray","xray","eggs","acts","axe","ax","hex",
-    "x.","letter x",
+    // Core & phonetic
+    "x","ex","x-ray","xray",
+    // Homophones & mishears
+    "eggs","acts","axe","ax","hex","next","text","flex","rex","sex","six","mix","fix",
+    "x.","letter x","the letter x",
   ]);
   addMap("Y", [
-    "y","why","wye","yankee","wise","white","wide","wine",
-    "y.","letter y",
+    // Core & phonetic
+    "y","why","wye","yankee",
+    // Homophones & mishears (note: many Y-sounds overlap with I)
+    "wise","wild","wind","wing","will","with","wish","which","witch","width",
+    "yard","yarn","yawn","year","yell","yes","yet","yield","yoke","young",
+    "y.","letter y","the letter y",
   ]);
   addMap("Z", [
-    "z","zed","zee","zulu","said","set","zeal","zen","zip",
-    "z.","letter z",
+    // Core & phonetic
+    "z","zed","zee","zulu",
+    // Homophones & mishears
+    "said","zeal","zen","zip","zone","zoo","zero","zigzag","zinc","zombie","zap",
+    "z.","letter z","the letter z",
   ]);
 
   /* ========================================================
