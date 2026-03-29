@@ -13,6 +13,7 @@ const VoiceInput = (() => {
 
   let recognition = null;
   let listening = false;
+  let wantListening = false; // whether user wants continuous listening
   let onResult = null;   // callback: (letters: string[]) => void
   let onStateChange = null; // callback: (listening: boolean) => void
   let currentMode = "vowel"; // "vowel" | "consonant" | "spelling"
@@ -178,15 +179,34 @@ const VoiceInput = (() => {
 
     rec.onend = () => {
       listening = false;
+      // Auto-restart if user still wants to listen
+      if (wantListening) {
+        try {
+          recognition = createRecognition();
+          if (recognition) {
+            recognition.start();
+            listening = true;
+            return; // stay in listening state
+          }
+        } catch (_) {}
+      }
+      wantListening = false;
       if (onStateChange) onStateChange(false);
     };
 
     rec.onerror = (event) => {
-      if (event.error !== "no-speech" && event.error !== "aborted") {
+      listening = false;
+      if (event.error === "not-allowed" || event.error === "service-not-available") {
+        // Permission denied or no speech service — stop trying
+        wantListening = false;
+        console.warn("Voice input unavailable:", event.error);
+      } else if (event.error !== "no-speech" && event.error !== "aborted") {
         console.warn("Voice input error:", event.error);
       }
-      listening = false;
-      if (onStateChange) onStateChange(false);
+      // For no-speech / network errors, onend will handle restart
+      if (!wantListening) {
+        if (onStateChange) onStateChange(false);
+      }
     };
 
     return rec;
@@ -196,18 +216,21 @@ const VoiceInput = (() => {
     if (!supported) return;
     if (listening) stop();
     currentMode = mode || currentMode;
+    wantListening = true;
     recognition = createRecognition();
-    if (!recognition) return;
+    if (!recognition) { wantListening = false; return; }
     try {
       recognition.start();
       listening = true;
       if (onStateChange) onStateChange(true);
     } catch (e) {
       console.warn("Voice start failed:", e);
+      wantListening = false;
     }
   }
 
   function stop() {
+    wantListening = false;
     if (!recognition) return;
     try {
       recognition.abort();

@@ -9,16 +9,32 @@ const GameAudio = (() => {
 
   let audioCtx = null;
   let soundEnabled = true;
+  let userHasInteracted = false;
+
+  // Only create/resume AudioContext after a real user gesture
+  function markUserInteraction() {
+    userHasInteracted = true;
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+  }
+
+  // Listen for first user gesture to unlock audio
+  ["click", "touchstart", "keydown"].forEach(evt => {
+    document.addEventListener(evt, markUserInteraction, { once: false, passive: true });
+  });
 
   function ensureAudio() {
+    if (!userHasInteracted) return false;
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    return true;
   }
 
   function playTone(freq, dur, type = "sine", vol = 0.18) {
-    if (!soundEnabled) return;
+    if (!soundEnabled || !userHasInteracted) return;
     try {
-      ensureAudio();
+      if (!ensureAudio()) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = type;
@@ -75,7 +91,7 @@ const GameAudio = (() => {
     let noteIndex = 0;
 
     function scheduleNote() {
-      if (!bgmPlaying || !soundEnabled || !audioCtx) return;
+      if (!bgmPlaying || !soundEnabled || !userHasInteracted || !audioCtx) return;
       const mood = MOODS[currentMood] || MOODS.title;
       const idx = mood.pattern[noteIndex % mood.pattern.length];
       const freq = mood.notes[idx % mood.notes.length];
@@ -111,7 +127,7 @@ const GameAudio = (() => {
       play(mood) {
         if (mood) currentMood = mood;
         if (bgmPlaying) { this.setMood(mood || currentMood); return; }
-        ensureAudio();
+        if (!ensureAudio()) return; // skip if no user gesture yet
         bgmPlaying = true;
         noteIndex = 0;
         const tempo = () => (MOODS[currentMood] || MOODS.title).tempo;
