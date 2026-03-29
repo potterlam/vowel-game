@@ -967,6 +967,37 @@ html, body {
 .btn-submit:active { transform: scale(.95); }
 .btn-submit:disabled { opacity: .4; pointer-events: none; }
 
+/* Mic Button */
+.btn-mic {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(106, 13, 173, .35);
+    border: 2px solid var(--purple-light);
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all .25s;
+    touch-action: manipulation;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.btn-mic:hover, .btn-mic:active {
+    background: rgba(106, 13, 173, .55);
+    transform: scale(1.05);
+}
+.btn-mic.mic-active {
+    background: rgba(231, 76, 60, .5);
+    border-color: var(--red);
+    animation: micPulse 1s ease-in-out infinite;
+}
+.btn-mic.hidden { display: none; }
+@keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, .4); }
+    50% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+}
+
 /* Feedback Overlay */
 .feedback-overlay {
     position: absolute; inset: 0;

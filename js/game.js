@@ -1,15 +1,17 @@
 /* ===================================================
-   VOWEL QUEST — Game Engine  v2
-   - 3 Levels × 5 random questions
-   - TTS (text-to-speech) for questions
-   - On-screen letter keyboard for spelling
-   - Hint toggle (show/hide word)
-   - Consonant DLC mode
-   - More visual effects & companion fairy
+   VOWEL QUEST — Game Engine  v3
+   Modules: audio.js, particles.js, voice-input.js, i18n.js, questions.js
+   This file: game logic, UI, state management
    =================================================== */
 
 (function () {
   "use strict";
+
+  /* ---------- Module aliases ---------- */
+  const { ensureAudio, SFX, BGM } = GameAudio;
+  const spawnParticles = GameParticles.spawn;
+  const confettiBurst = GameParticles.confettiBurst;
+  const showScorePopup = GameParticles.showScorePopup;
 
   /* ---------- Constants ---------- */
   const VOWELS = ["A", "E", "I", "O", "U"];
@@ -60,146 +62,10 @@
 
   /* Companion messages — now driven by i18n */
 
-  /* ============================
-     AUDIO — synthesized sounds
-     ============================ */
-  let audioCtx = null;
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+  /* ---------- Sync audio module with game state ---------- */
+  function syncAudio() {
+    GameAudio.soundEnabled = state.soundOn;
   }
-
-  function playTone(freq, dur, type = "sine", vol = 0.18) {
-    if (!state.soundOn) return;
-    try {
-      ensureAudio();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-      osc.connect(gain).connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + dur);
-    } catch (_) {}
-  }
-
-  const SFX = {
-    correct()  { playTone(523,.15); setTimeout(()=>playTone(659,.15),100); setTimeout(()=>playTone(784,.25),200); },
-    wrong()    { playTone(200,.25,"square",.12); setTimeout(()=>playTone(160,.3,"square",.1),150); },
-    select()   { playTone(440,.08,"triangle",.1); },
-    levelUp()  { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,.2),i*120)); },
-    bossTick() { playTone(880,.05,"square",.06); },
-    victory()  { [523,659,784,1047,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,.2,"triangle",.15),i*150)); },
-    defeat()   { [400,350,300,200].forEach((f,i)=>setTimeout(()=>playTone(f,.3,"sawtooth",.08),i*200)); },
-    tts()      { playTone(330,.06,"triangle",.06); },
-  };
-
-  /* ============================
-     BGM — synthesized background music
-     Fantasy castle arpeggio loop
-     ============================ */
-  const BGM = (() => {
-    let bgmGain = null;         // master gain node for BGM
-    let bgmInterval = null;     // scheduling timer
-    let bgmPlaying = false;
-    let bgmVolume = 0.07;       // soft default (0-1)
-    let currentMood = "title";  // "title" | "game" | "boss"
-
-    // Musical scales (note frequencies in Hz)
-    // C major pentatonic with octave variations for magical feel
-    const MOODS = {
-      title: {
-        notes: [262,294,330,392,440, 523,587,659,784,880],  // C4-A5 pentatonic
-        tempo: 280,    // ms per note
-        type: "sine",
-        pattern: [0,2,4,7,9, 7,4,2, 0,4,7,9,7,4,2,0], // arpeggio up-down
-      },
-      game: {
-        notes: [330,392,440,523,587, 659,784,880],           // E4-A5
-        tempo: 220,
-        type: "triangle",
-        pattern: [0,2,4,6,7, 6,4,2, 0,1,3,5,7,5,3,1],
-      },
-      boss: {
-        notes: [220,262,294,330,392,440,523],                // A3-C5 minor feel
-        tempo: 180,
-        type: "sawtooth",
-        pattern: [0,3,5,6, 5,3,0,1, 3,5,6,5, 3,1,0,2],
-      },
-    };
-
-    let noteIndex = 0;
-
-    function scheduleNote() {
-      if (!bgmPlaying || !state.soundOn || !audioCtx) return;
-      const mood = MOODS[currentMood] || MOODS.title;
-      const idx = mood.pattern[noteIndex % mood.pattern.length];
-      const freq = mood.notes[idx % mood.notes.length];
-
-      try {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        const t = audioCtx.currentTime;
-
-        osc.type = mood.type;
-        osc.frequency.setValueAtTime(freq, t);
-
-        // Soft envelope: fade in, sustain, fade out
-        const noteDur = mood.tempo / 1000 * 0.9;
-        gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(bgmVolume, t + 0.02);
-        gain.gain.setValueAtTime(bgmVolume, t + noteDur * 0.6);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + noteDur);
-
-        // Connect through master gain
-        if (!bgmGain) {
-          bgmGain = audioCtx.createGain();
-          bgmGain.connect(audioCtx.destination);
-        }
-        bgmGain.gain.value = 1;
-        osc.connect(gain).connect(bgmGain);
-        osc.start(t);
-        osc.stop(t + noteDur + 0.05);
-      } catch (_) {}
-
-      noteIndex++;
-    }
-
-    return {
-      play(mood) {
-        if (mood) currentMood = mood;
-        if (bgmPlaying) { this.setMood(mood || currentMood); return; }
-        ensureAudio();
-        bgmPlaying = true;
-        noteIndex = 0;
-        const tempo = () => (MOODS[currentMood] || MOODS.title).tempo;
-        // Use dynamic interval that adapts to mood tempo
-        const loop = () => {
-          if (!bgmPlaying) return;
-          scheduleNote();
-          bgmInterval = setTimeout(loop, tempo());
-        };
-        loop();
-      },
-      stop() {
-        bgmPlaying = false;
-        if (bgmInterval) { clearTimeout(bgmInterval); bgmInterval = null; }
-        noteIndex = 0;
-      },
-      setMood(mood) {
-        currentMood = mood;
-        noteIndex = 0; // restart pattern for new mood
-      },
-      setVolume(v) {
-        bgmVolume = Math.max(0, Math.min(1, v));
-        if (bgmGain) bgmGain.gain.value = bgmVolume > 0 ? 1 : 0;
-      },
-      getVolume() { return bgmVolume; },
-      isPlaying() { return bgmPlaying; },
-    };
-  })();
 
   /* ============================
      TEXT-TO-SPEECH
@@ -212,7 +78,6 @@
     utter.rate = 0.85;
     utter.pitch = 1.0;
     utter.volume = state.soundOn ? 1 : 0;
-    // Visual feedback on TTS button
     const btn = $("#tts-btn");
     btn.classList.add("speaking");
     utter.onend = () => btn.classList.remove("speaking");
@@ -220,96 +85,9 @@
     window.speechSynthesis.speak(utter);
   }
 
-  /* ============================
-     PARTICLES
-     ============================ */
-  const canvas = $("#particles");
-  const ctx = canvas.getContext("2d");
-  let particles = [];
-
-  function resizeCanvas() {
-    const c = $("#game-container");
-    canvas.width = c.clientWidth;
-    canvas.height = c.clientHeight;
-  }
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
-
-  class Particle {
-    constructor(x, y, color, size, speed, life) {
-      this.x = x; this.y = y;
-      this.color = color;
-      this.size = size;
-      this.vx = (Math.random() - 0.5) * speed;
-      this.vy = (Math.random() - 0.5) * speed - 1;
-      this.life = life;
-      this.maxLife = life;
-      this.alpha = 1;
-    }
-    update() {
-      this.x += this.vx;
-      this.y += this.vy;
-      this.vy += 0.02;
-      this.life--;
-      this.alpha = this.life / this.maxLife;
-    }
-    draw(c) {
-      c.save();
-      c.globalAlpha = this.alpha;
-      c.fillStyle = this.color;
-      c.beginPath();
-      c.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-      c.fill();
-      c.restore();
-    }
-  }
-
-  function spawnParticles(x, y, count, color, size = 3, speed = 4, life = 40) {
-    for (let i = 0; i < count; i++) {
-      particles.push(new Particle(x, y, color, Math.random() * size + 1, speed, life + Math.random() * 20));
-    }
-  }
-
-  function animateParticles() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles = particles.filter(p => p.life > 0);
-    particles.forEach(p => { p.update(); p.draw(ctx); });
-    requestAnimationFrame(animateParticles);
-  }
-  animateParticles();
-
-  function confettiBurst() {
-    const colors = ["#ffd700","#e74c3c","#2ecc71","#3498db","#9b59b6","#f39c12"];
-    for (let i = 0; i < 50; i++) {
-      const el = document.createElement("div");
-      el.className = "confetti";
-      el.style.left = Math.random() * 100 + "%";
-      el.style.top = "-10px";
-      el.style.background = colors[Math.floor(Math.random() * colors.length)];
-      el.style.animationDuration = (1 + Math.random()) + "s";
-      el.style.animationDelay = Math.random() * 0.5 + "s";
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2500);
-    }
-  }
-
-  function showScorePopup(amount, parent) {
-    const el = document.createElement("div");
-    el.className = "score-popup";
-    el.textContent = "+" + amount;
-    const rect = parent.getBoundingClientRect();
-    el.style.left = rect.left + rect.width / 2 - 20 + "px";
-    el.style.top = rect.top + "px";
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1000);
-  }
-
+  /* ---------- Slash effect helper ---------- */
   function showSlashEffect() {
-    const el = document.createElement("div");
-    el.className = "slash-effect";
-    const bossHud = $("#boss-hud");
-    bossHud.appendChild(el);
-    setTimeout(() => el.remove(), 500);
+    GameParticles.showSlashEffect($("#boss-hud"));
   }
 
   /* ============================
@@ -468,6 +246,7 @@
      ============================ */
   function initTitle() {
     loadProgress();
+    syncAudio();
     // Always show continue — lets player jump to map from any mode
     $("#continue-btn").classList.remove("hidden");
     updateSoundBtn();
@@ -530,6 +309,7 @@
 
   $("#sound-toggle").addEventListener("click", () => {
     state.soundOn = !state.soundOn;
+    syncAudio();
     updateSoundBtn();
     saveProgress();
     if (state.soundOn) {
@@ -891,11 +671,10 @@
     state.answered = true;
     $("#submit-btn").disabled = true;
 
-    // Reveal the word on answer
-    $("#word-letters").classList.remove("hidden-hint");
-
     const input = $("#spelling-input");
     if (isCorrect) {
+      // Reveal the word on correct answer
+      $("#word-letters").classList.remove("hidden-hint");
       input.classList.add("spelling-correct");
       handleCorrectSpelling(q);
     } else {
@@ -921,7 +700,7 @@
       state.bossHP = Math.max(0, state.bossHP - 1);
       updateBossHUD();
       showSlashEffect();
-      spawnParticles(canvas.width / 2, 60, 20, "#e74c3c", 4, 5, 30);
+      spawnParticles(GameParticles.canvas.width / 2, 60, 20, "#e74c3c", 4, 5, 30);
     }
 
     const card = $("#question-card");
@@ -944,16 +723,17 @@
     state.lives--;
     updateLives();
 
-    // Highlight correct vs wrong letters in the word display
-    $$(".letter-tile").forEach(tile => tile.classList.add("correct-highlight"));
-
     const card = $("#question-card");
     card.style.animation = "shakeTile .4s";
     setTimeout(() => card.style.animation = "", 500);
 
-    showFeedback(false, t("feedbackWrong"), `${t("feedbackSpellAns")} ${correct}`);
-
     if (state.lives <= 0) {
+      // Out of lives — reveal answer then advance or game over
+      $$(".letter-tile").forEach(tile => tile.classList.add("correct-highlight"));
+      $("#word-letters").classList.remove("hidden-hint");
+
+      showFeedback(false, t("feedbackWrong"), `${t("feedbackSpellAns")} ${correct}`);
+
       const level = LEVELS.find(l => l.id === state.currentLevel);
       if (level && level.isBoss) {
         setTimeout(() => gameOver(), FEEDBACK_DELAY);
@@ -966,9 +746,19 @@
         }, FEEDBACK_DELAY);
       }
     } else {
+      // Still have lives — allow retry on same question
+      showFeedback(false, t("feedbackWrong"), "");
+
       setTimeout(() => {
-        state.currentQ++;
-        loadQuestion();
+        state.answered = false;
+        state.spelledLetters = [];
+        renderSpellingTiles();
+        const input = $("#spelling-input");
+        input.value = "";
+        input.classList.remove("spelling-wrong");
+        $("#feedback-overlay").classList.add("hidden");
+        $("#submit-btn").disabled = false;
+        highlightExpectedKey();
       }, FEEDBACK_DELAY);
     }
   }
@@ -1041,7 +831,7 @@
       state.bossHP = Math.max(0, state.bossHP - 1);
       updateBossHUD();
       showSlashEffect();
-      spawnParticles(canvas.width / 2, 60, 20, "#e74c3c", 4, 5, 30);
+      spawnParticles(GameParticles.canvas.width / 2, 60, 20, "#e74c3c", 4, 5, 30);
     }
 
     const card = $("#question-card");
@@ -1064,40 +854,37 @@
     state.lives--;
     updateLives();
 
-    $$(".vowel-btn").forEach(btn => {
-      const v = btn.dataset.letter;
-      if (correctSet.has(v) && !state.selectedLetters.has(v)) {
-        btn.classList.add("missed");
-      } else if (!correctSet.has(v) && state.selectedLetters.has(v)) {
-        btn.classList.add("wrong");
-      } else if (correctSet.has(v) && state.selectedLetters.has(v)) {
-        btn.classList.add("correct");
-      }
-    });
-
-    const allTarget = state.mode === "vowel" ? VOWELS : CONSONANTS;
-    $$(".letter-tile").forEach(tile => {
-      const ch = tile.dataset.letter;
-      if (allTarget.includes(ch) && correctSet.has(ch)) {
-        tile.classList.add("correct-highlight");
-      }
-      if (allTarget.includes(ch) && state.selectedLetters.has(ch) && !correctSet.has(ch)) {
-        tile.classList.add("wrong-highlight");
-      }
-    });
-
-    // Also reveal the word letters on wrong answer
-    $("#word-letters").classList.remove("hidden-hint");
-
     const card = $("#question-card");
     card.style.animation = "shakeTile .4s";
     setTimeout(() => card.style.animation = "", 500);
 
-    const answerStr = [...correctSet].join(", ");
-    const label = state.mode === "vowel" ? t("feedbackVowelAns") : state.mode === "consonant" ? t("feedbackConsAns") : t("feedbackLetterAns");
-    showFeedback(false, t("feedbackWrong"), `${label} ${answerStr}`);
-
     if (state.lives <= 0) {
+      // Out of lives — reveal answer then advance or game over
+      $$(".vowel-btn").forEach(btn => {
+        const v = btn.dataset.letter;
+        if (correctSet.has(v) && !state.selectedLetters.has(v)) {
+          btn.classList.add("missed");
+        } else if (!correctSet.has(v) && state.selectedLetters.has(v)) {
+          btn.classList.add("wrong");
+        } else if (correctSet.has(v) && state.selectedLetters.has(v)) {
+          btn.classList.add("correct");
+        }
+      });
+
+      const allTarget = state.mode === "vowel" ? VOWELS : CONSONANTS;
+      $$(".letter-tile").forEach(tile => {
+        const ch = tile.dataset.letter;
+        if (allTarget.includes(ch) && correctSet.has(ch)) {
+          tile.classList.add("correct-highlight");
+        }
+      });
+
+      $("#word-letters").classList.remove("hidden-hint");
+
+      const answerStr = [...correctSet].join(", ");
+      const label = state.mode === "vowel" ? t("feedbackVowelAns") : t("feedbackConsAns");
+      showFeedback(false, t("feedbackWrong"), `${label} ${answerStr}`);
+
       const level = LEVELS.find(l => l.id === state.currentLevel);
       if (level && level.isBoss) {
         setTimeout(() => gameOver(), FEEDBACK_DELAY);
@@ -1110,9 +897,21 @@
         }, FEEDBACK_DELAY);
       }
     } else {
+      // Still have lives — allow retry on same question
+      showFeedback(false, t("feedbackWrong"), "");
+
       setTimeout(() => {
-        state.currentQ++;
-        loadQuestion();
+        state.answered = false;
+        state.selectedLetters.clear();
+        $$(".vowel-btn").forEach(btn => {
+          btn.classList.remove("selected", "correct", "wrong", "missed");
+          btn.disabled = false;
+        });
+        $$(".letter-tile").forEach(tile => {
+          tile.classList.remove("vowel-highlight", "correct-highlight", "wrong-highlight");
+        });
+        $("#feedback-overlay").classList.add("hidden");
+        $("#submit-btn").disabled = false;
       }, FEEDBACK_DELAY);
     }
   }
@@ -1298,6 +1097,7 @@
   function goToLobby() {
     clearBossTimer();
     window.speechSynthesis && window.speechSynthesis.cancel();
+    if (typeof VoiceInput !== "undefined") VoiceInput.stop();
     saveProgress();
     initTitle();
     showScreen("title");
@@ -1314,21 +1114,58 @@
   });
 
   /* ============================
-     AMBIENT PARTICLES
+     VOICE INPUT INTEGRATION
      ============================ */
-  function ambientStars() {
-    if (Math.random() < 0.03) {
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height * 0.5;
-      spawnParticles(x, y, 1, "rgba(255,215,0,0.5)", 2, 0.5, 60);
-    }
-    if (Math.random() < 0.01) {
-      const x = Math.random() * canvas.width;
-      spawnParticles(x, 0, 2, "rgba(155,89,182,0.4)", 2, 0.3, 80);
-    }
-    requestAnimationFrame(ambientStars);
+  const micBtn = $("#mic-btn");
+  if (typeof VoiceInput !== "undefined" && VoiceInput.supported) {
+    micBtn.classList.remove("hidden");
+
+    VoiceInput.onStateChange((isListening) => {
+      micBtn.classList.toggle("mic-active", isListening);
+      micBtn.textContent = isListening ? "🔴" : "🎤";
+    });
+
+    VoiceInput.onResult((letters) => {
+      if (state.answered) return;
+
+      if (state.mode === "spelling") {
+        // In spelling mode, append recognized letters to the spelling tiles
+        if (!state.spelledLetters) state.spelledLetters = [];
+        letters.forEach(ch => state.spelledLetters.push(ch));
+        renderSpellingTiles();
+        highlightExpectedKey();
+        SFX.select();
+      } else {
+        // In vowel/consonant mode, toggle the recognized letters
+        const validSet = state.mode === "vowel"
+          ? new Set(VOWELS)
+          : new Set(CONSONANTS);
+
+        letters.forEach(letter => {
+          if (!validSet.has(letter)) return;
+          const btn = document.querySelector(`.vowel-btn[data-letter="${letter}"]`);
+          if (!btn || btn.disabled) return;
+
+          if (state.selectedLetters.has(letter)) {
+            state.selectedLetters.delete(letter);
+            btn.classList.remove("selected");
+          } else {
+            state.selectedLetters.add(letter);
+            btn.classList.add("selected");
+          }
+        });
+        highlightLetters();
+        SFX.select();
+      }
+    });
+
+    micBtn.addEventListener("click", () => {
+      if (state.answered) return;
+      VoiceInput.toggle(state.mode);
+    });
+  } else {
+    micBtn.classList.add("hidden");
   }
-  ambientStars();
 
   /* ============================
      LANGUAGE TOGGLE
@@ -1376,11 +1213,15 @@
      INIT
      ============================ */
   function init() {
+    // Initialize particles on the canvas
+    GameParticles.init(document.querySelector("#particles"));
+
     // Load language preference
     const savedLang = localStorage.getItem("vowelquest_lang");
     if (savedLang && I18N[savedLang]) currentLang = savedLang;
     updateLangBtn();
     refreshI18nDOM();
+    syncAudio();
     initTitle();
     showScreen("title");
   }
