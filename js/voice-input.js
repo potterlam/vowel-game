@@ -25,41 +25,162 @@ const VoiceInput = (() => {
 
   /* --------------------------------------------------------
      PRONUNCIATION MAP — spoken sound → uppercase letter
+     The Web Speech API returns full English words for short
+     utterances, so we map every common transcription variant.
      -------------------------------------------------------- */
   const LETTER_MAP = {};
   function addMap(letter, variants) {
     variants.forEach(v => { LETTER_MAP[v.toLowerCase()] = letter; });
   }
 
-  // Vowels
-  addMap("A", ["a","ay","aye","eh","hey","alpha","ah","aay","eight"]);
-  addMap("E", ["e","ee","eee","echo","he"]);
-  addMap("I", ["i","eye","ai","india"]);
-  addMap("O", ["o","oh","ooh","oooh","ohhh","oscar","owe","eau"]);
-  addMap("U", ["u","you","yu","ew","uniform","yoo","yew","ooh"]);
+  // ── Vowels (extensive — these are the hardest to detect) ──
+  addMap("A", [
+    "a","ay","aye","eh","hey","alpha","ah","aay","eight","ate",
+    "aim","age","ace","ape","aid","ale","hay","ha","huh",
+    "ei","ey","they","say","way","day","may","pay","ray","bay",
+    "play","pray","stay","grey","gray","lay","jay","nay","yay",
+    "weigh","weight","wait","late","fate","gate","hate","rate",
+    "name","fame","came","game","same","make","take","bake","cake",
+    "lake","wake","shake","stake","grade","made","save","gave",
+    "a.","letter a",
+  ]);
+  addMap("E", [
+    "e","ee","eee","echo","he","she","we","me","be","the",
+    "eat","each","ease","east","ear","eel","eve","even",
+    "eagle","eager","era","equal","evil",
+    "free","tree","three","see","fee","knee","key","pee","tea","flee",
+    "bee","dee","gee","lee","tee","wee","plea",
+    "seed","feed","need","reed","deed","weed","speed","bleed","breed",
+    "deep","keep","sleep","sheep","sweep","creep","steep",
+    "sea","pea","flea","deal","real","meal","seal","heal","steal",
+    "mean","lean","clean","bean","dean","jean",
+    "sheet","meet","feet","sweet","street","beat","heat","seat","neat",
+    "e.","letter e",
+  ]);
+  addMap("I", [
+    "i","eye","ai","india","hi","high","buy","by","my","tie","die",
+    "lie","pie","guy","fly","try","cry","dry","fry","sky","spy","shy",
+    "why","sigh","thigh",
+    "ice","eyes","I'm","I'll","aisle","isle","iron",
+    "night","right","light","sight","might","fight","tight","knight",
+    "like","bike","hike","mike","strike","spike",
+    "time","dime","lime","mine","fine","line","nine","wine","vine","pine",
+    "side","hide","ride","wide","guide","pride","slide","bride",
+    "five","dive","drive","live","alive","arrive",
+    "white","write","quite","bite","kite","site","lite",
+    "i.","letter i",
+  ]);
+  addMap("O", [
+    "o","oh","ooh","oooh","ohhh","oscar","owe","eau",
+    "awe","or","all","on","own","old","only","over",
+    "go","no","so","low","know","show","flow","grow","blow","slow","snow",
+    "throw","glow", "row","bow","tow","mow","sow",
+    "home","bone","tone","zone","cone","phone","stone","alone",
+    "note","vote","quote","wrote","code","mode","node","rode","role","hole",
+    "hope","rope","cope","pope","slope",
+    "open","ocean","omit",
+    "oak","oat","oath","oil",
+    "o.","letter o","zero","whoa",
+  ]);
+  addMap("U", [
+    "u","you","yu","ew","uniform","yoo","yew",
+    "who","hue","new","few","view","due","sue","true","blue","clue","glue",
+    "grew","drew","flew","knew","blew","threw","crew","brew","stew",
+    "use","used","user","huge","cube","tube","cute","mute","duke","rule",
+    "rude","dude","nude","mood","food","cool","pool","tool","school","fool",
+    "room","moon","soon","noon","spoon","bloom","broom","groom","zoom",
+    "too","two","do","to","shoe","move","prove","lose","choose",
+    "you're","your","youth",
+    "u.","letter u","ooh","oo",
+  ]);
 
-  // Consonants
-  addMap("B", ["b","be","bee","bravo"]);
-  addMap("C", ["c","see","sea","charlie","si","ce"]);
-  addMap("D", ["d","dee","delta"]);
-  addMap("F", ["f","ef","eff","foxtrot"]);
-  addMap("G", ["g","gee","jee","golf"]);
-  addMap("H", ["h","aitch","hotel","age","ach"]);
-  addMap("J", ["j","jay","juliet"]);
-  addMap("K", ["k","kay","kilo","okay"]);
-  addMap("L", ["l","el","ell","lima"]);
-  addMap("M", ["m","em","mike"]);
-  addMap("N", ["n","en","november"]);
-  addMap("P", ["p","pee","papa"]);
-  addMap("Q", ["q","queue","cue","quebec"]);
-  addMap("R", ["r","are","ar","romeo"]);
-  addMap("S", ["s","es","sierra"]);
-  addMap("T", ["t","tee","tea","tango"]);
-  addMap("V", ["v","vee","victor"]);
-  addMap("W", ["w","double u","double you","whiskey","doubleyou"]);
-  addMap("X", ["x","ex","x-ray","xray"]);
-  addMap("Y", ["y","why","wye","yankee"]);
-  addMap("Z", ["z","zed","zee","zulu"]);
+  // ── Consonants ──
+  addMap("B", [
+    "b","be","bee","bravo","beat","beef","bead","bean","beach","beam",
+    "beer","beard","beast","bees","beep","beet","being",
+    "b.","letter b",
+  ]);
+  addMap("C", [
+    "c","see","sea","charlie","si","ce","seed","seen","seal","seat",
+    "seem","seek","seize","scene","screen","seeing","seeing",
+    "c.","letter c",
+  ]);
+  addMap("D", [
+    "d","dee","delta","deal","dean","dear","deep","deed","deem","deer",
+    "d.","letter d",
+  ]);
+  addMap("F", [
+    "f","ef","eff","foxtrot","if","off","half",
+    "f.","letter f",
+  ]);
+  addMap("G", [
+    "g","gee","jee","golf","geek","gene","genie","jeep",
+    "g.","letter g",
+  ]);
+  addMap("H", [
+    "h","aitch","hotel","age","ach","ache","each","8",
+    "h.","letter h","edge","etch","ash","h8",
+  ]);
+  addMap("J", [
+    "j","jay","juliet","jade","jail","jane","james","jake","jam",
+    "j.","letter j",
+  ]);
+  addMap("K", [
+    "k","kay","kilo","okay","ok","kate","cake",
+    "k.","letter k","que","kei",
+  ]);
+  addMap("L", [
+    "l","el","ell","lima","ale","all","else","elf","elm","elbow",
+    "l.","letter l",
+  ]);
+  addMap("M", [
+    "m","em","mike","am","aim","elm","arm","um",
+    "m.","letter m",
+  ]);
+  addMap("N", [
+    "n","en","november","an","in","and","end","inn",
+    "n.","letter n",
+  ]);
+  addMap("P", [
+    "p","pee","papa","pe","pea","peak","peace","peel","peep","peer",
+    "p.","letter p",
+  ]);
+  addMap("Q", [
+    "q","queue","cue","quebec","cute","cube",
+    "q.","letter q","kyu",
+  ]);
+  addMap("R", [
+    "r","are","ar","romeo","our","or","err","her",
+    "r.","letter r",
+  ]);
+  addMap("S", [
+    "s","es","sierra","as","ass","ace","ice",
+    "s.","letter s",
+  ]);
+  addMap("T", [
+    "t","tee","tea","tango","te","teen","team","teeth","teal","tear",
+    "t.","letter t",
+  ]);
+  addMap("V", [
+    "v","vee","victor","ve","vie","via",
+    "v.","letter v",
+  ]);
+  addMap("W", [
+    "w","double u","double you","whiskey","doubleyou","dub",
+    "w.","letter w",
+  ]);
+  addMap("X", [
+    "x","ex","x-ray","xray","eggs","acts","axe","ax","hex",
+    "x.","letter x",
+  ]);
+  addMap("Y", [
+    "y","why","wye","yankee","wise","white","wide","wine",
+    "y.","letter y",
+  ]);
+  addMap("Z", [
+    "z","zed","zee","zulu","said","set","zeal","zen","zip",
+    "z.","letter z",
+  ]);
 
   /* ========================================================
      LETTER MODE  — vowel / consonant
@@ -71,6 +192,11 @@ const VoiceInput = (() => {
   function parseLetters(transcript) {
     const raw = transcript.trim().toLowerCase();
     if (!raw) return [];
+
+    // Debug: log what the Speech API actually returns
+    console.log("[Voice] heard:", JSON.stringify(raw));
+
+    // Check whole phrase against map
     if (LETTER_MAP[raw]) return [LETTER_MAP[raw]];
 
     const tokens = raw.replace(/\band\b/g, " ").replace(/,/g, " ")
@@ -83,10 +209,11 @@ const VoiceInput = (() => {
         letters.push(LETTER_MAP[token]);
       }
     }
-    // If nothing matched from map, try treating each raw char as a letter
+
+    // Fallback: first alphabetic character from raw transcript
     if (letters.length === 0) {
-      const ch = raw.replace(/[^a-z]/g, "");
-      if (ch.length === 1) letters.push(ch.toUpperCase());
+      const match = raw.match(/[a-z]/);
+      if (match) letters.push(match[0].toUpperCase());
     }
     return [...new Set(letters)];
   }
