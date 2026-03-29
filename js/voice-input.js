@@ -22,6 +22,7 @@ const VoiceInput = (() => {
   let stateCallback = null;    // (listening: boolean) => void
   let currentMode = "vowel";
   let expectedWord = "";       // uppercase, set by game for spelling disambiguation
+  let validLetters = null;     // Set of uppercase letters valid for current mode
 
   /* --------------------------------------------------------
      PRONUNCIATION MAP — spoken sound → uppercase letter
@@ -55,6 +56,7 @@ const VoiceInput = (() => {
     "sea","pea","flea","deal","real","meal","seal","heal","steal",
     "mean","lean","clean","bean","dean","jean",
     "sheet","meet","feet","sweet","street","beat","heat","seat","neat",
+    "ye","yea","yeah","yee","year","easy","email","emoji",
     "e.","letter e",
   ]);
   addMap("I", [
@@ -188,13 +190,11 @@ const VoiceInput = (() => {
      Each speech result fires one toggle then auto-restarts.
      ======================================================== */
 
-  /** Parse transcript into deduplicated letter array */
+  /** Parse transcript into deduplicated letter array.
+   *  If validLetters is set, prefer letters in that set. */
   function parseLetters(transcript) {
     const raw = transcript.trim().toLowerCase();
     if (!raw) return [];
-
-    // Debug: log what the Speech API actually returns
-    console.log("[Voice] heard:", JSON.stringify(raw));
 
     // Check whole phrase against map
     if (LETTER_MAP[raw]) return [LETTER_MAP[raw]];
@@ -215,46 +215,71 @@ const VoiceInput = (() => {
       const match = raw.match(/[a-z]/);
       if (match) letters.push(match[0].toUpperCase());
     }
-    return [...new Set(letters)];
+
+    const unique = [...new Set(letters)];
+
+    // If we have a valid set, filter to only valid letters
+    if (validLetters && unique.length > 0) {
+      const filtered = unique.filter(l => validLetters.has(l));
+      return filtered.length > 0 ? filtered : unique;
+    }
+    return unique;
   }
 
   function createLetterRecognition() {
     const rec = new SpeechRecognition();
     rec.lang = "en-US";
-    rec.continuous = true;       // stay open — no restart gaps
-    rec.interimResults = true;   // get partial results for faster feedback
+    rec.continuous = true;
+    rec.interimResults = true;
     rec.maxAlternatives = 5;
 
-    // Track which result indices we already processed
-    let processedUpTo = 0;
+    // Dedup: track the last letter+time we fired so rapid interim
+    // updates for the same utterance don't toggle twice
+    let lastFired = "";       // last letter string we sent
+    let lastFiredAt = 0;      // timestamp
+    const DEDUP_MS = 800;     // ignore same letter within this window
+    let lastInterimText = ""; // avoid re-processing identical interim text
 
     rec.onresult = (event) => {
-      for (let i = processedUpTo; i < event.results.length; i++) {
-        const result = event.results[i];
+      // Process ALL results — use the latest one
+      const latest = event.results[event.results.length - 1];
+      if (!latest || latest.length === 0) return;
 
-        // Only act on final (confirmed) segments
-        if (!result.isFinal) continue;
-        processedUpTo = i + 1;
+      const transcript = latest[0].transcript;
+      const isFinal = latest.isFinal;
 
-        // Collect alternatives for this segment
-        const alts = [];
-        for (let j = 0; j < result.length; j++) {
-          alts.push(result[j].transcript);
-        }
+      // Skip if the interim text hasn't changed
+      if (!isFinal && transcript === lastInterimText) return;
+      lastInterimText = transcript;
 
-        // Use first alternative that yields valid letters
-        for (const t of alts) {
-          const letters = parseLetters(t);
-          if (letters.length > 0) {
-            if (resultCallback) resultCallback(letters, currentMode);
-            break;
-          }
+      // Collect alternatives
+      const alts = [];
+      for (let j = 0; j < latest.length; j++) {
+        alts.push(latest[j].transcript);
+      }
+
+      // Try each alternative
+      for (const t of alts) {
+        const letters = parseLetters(t);
+        if (letters.length > 0) {
+          const key = letters.join(",");
+          const now = Date.now();
+
+          // Dedup: don't fire same letter again within DEDUP_MS
+          if (key === lastFired && now - lastFiredAt < DEDUP_MS) break;
+
+          console.log("[Voice]", isFinal ? "FINAL" : "interim",
+            JSON.stringify(t), "→", letters.join(","));
+
+          lastFired = key;
+          lastFiredAt = now;
+          if (resultCallback) resultCallback(letters, currentMode);
+          break;
         }
       }
     };
 
     rec.onend = () => {
-      // If user still wants to listen, restart (browser may stop continuous)
       if (wantContinuous) {
         try {
           recognition = createLetterRecognition();
@@ -267,12 +292,7 @@ const VoiceInput = (() => {
     };
 
     rec.onerror = (event) => {
-      if (event.error === "no-speech") {
-        // Browser fires no-speech after ~5s silence in continuous mode;
-        // onend will auto-restart if wantContinuous is true
-        return;
-      }
-      if (event.error === "aborted") return;
+      if (event.error === "no-speech" || event.error === "aborted") return;
       if (event.error === "not-allowed" || event.error === "service-not-available") {
         wantContinuous = false;
         listening = false;
@@ -441,6 +461,8 @@ const VoiceInput = (() => {
     setMode(mode) { currentMode = mode; },
     /** Set expected answer word (uppercase) for spelling disambiguation */
     setExpectedWord(word) { expectedWord = (word || "").toUpperCase(); },
+    /** Set which letters are valid for the current game mode */
+    setValidLetters(letters) { validLetters = letters ? new Set(letters) : null; },
     onResult(cb) { resultCallback = cb; },
     onStateChange(cb) { stateCallback = cb; },
   };

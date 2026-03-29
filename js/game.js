@@ -1162,6 +1162,14 @@
 
     micBtn.addEventListener("click", () => {
       if (state.answered) return;
+      // Tell voice input which letters are valid for this mode
+      if (state.mode === "vowel") {
+        VoiceInput.setValidLetters(VOWELS);
+      } else if (state.mode === "consonant") {
+        VoiceInput.setValidLetters(CONSONANTS);
+      } else {
+        VoiceInput.setValidLetters(null);
+      }
       VoiceInput.toggle(state.mode);
     });
   } else {
