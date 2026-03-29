@@ -538,6 +538,8 @@
       renderSpellingTiles();
       // In spelling mode, always hide word (the challenge IS to spell it)
       $("#word-letters").classList.add("hidden-hint");
+      // Tell voice input the expected word for disambiguation
+      if (typeof VoiceInput !== "undefined") VoiceInput.setExpectedWord(q.word);
     } else {
       // Reset letter buttons
       $$(".vowel-btn").forEach(btn => {

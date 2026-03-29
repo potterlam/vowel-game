@@ -1,8 +1,12 @@
 /* ===================================================
    VOWEL QUEST — Voice Input System
-   Uses Web Speech API (SpeechRecognition)
-   Maps spoken words/sounds to letter selections
-   Supports all 3 game modes: vowel, consonant, spelling
+   Two separate recognition strategies:
+     • Letter mode  (vowel / consonant) — continuous listening,
+       short utterances, auto-restart so user says one letter
+       at a time without re-clicking mic.
+     • Spelling mode — single-shot per click, recognises a
+       whole word. Uses the expected answer to disambiguate
+       similar-sounding alternatives ("duck" vs "tuck").
    =================================================== */
 
 const VoiceInput = (() => {
@@ -13,9 +17,11 @@ const VoiceInput = (() => {
 
   let recognition = null;
   let listening = false;
+  let wantContinuous = false;  // true only in letter mode
   let resultCallback = null;   // (letters: string[], mode: string) => void
   let stateCallback = null;    // (listening: boolean) => void
   let currentMode = "vowel";
+  let expectedWord = "";       // uppercase, set by game for spelling disambiguation
 
   /* --------------------------------------------------------
      PRONUNCIATION MAP — spoken sound → uppercase letter
@@ -55,22 +61,20 @@ const VoiceInput = (() => {
   addMap("Y", ["y","why","wye","yankee"]);
   addMap("Z", ["z","zed","zee","zulu"]);
 
-  /* --------------------------------------------------------
-     Parse transcript → array of uppercase letters
-     -------------------------------------------------------- */
+  /* ========================================================
+     LETTER MODE  — vowel / consonant
+     Continuous listening, short detection window.
+     Each speech result fires one toggle then auto-restarts.
+     ======================================================== */
 
-  /** For vowel/consonant mode: extract individual letter names from speech */
+  /** Parse transcript into deduplicated letter array */
   function parseLetters(transcript) {
     const raw = transcript.trim().toLowerCase();
     if (!raw) return [];
-
-    // First check if the whole phrase is one letter mapping
     if (LETTER_MAP[raw]) return [LETTER_MAP[raw]];
 
-    // Split by spaces, commas, "and"
     const tokens = raw.replace(/\band\b/g, " ").replace(/,/g, " ")
       .split(/\s+/).filter(Boolean);
-
     const letters = [];
     for (const token of tokens) {
       if (token.length === 1 && /^[a-z]$/.test(token)) {
@@ -78,70 +82,125 @@ const VoiceInput = (() => {
       } else if (LETTER_MAP[token]) {
         letters.push(LETTER_MAP[token]);
       }
-      // Skip unrecognized tokens — don't fall back to raw chars
     }
-    return [...new Set(letters)]; // deduplicate
+    return [...new Set(letters)];
   }
 
-  /** For spelling mode: extract the word from speech */
-  function parseSpelling(transcript) {
-    const raw = transcript.trim().toLowerCase();
-    if (!raw) return [];
-
-    // If it sounds like individual letter names ("are oh see kay" = R O C K),
-    // try mapping each token to a letter first
-    const tokens = raw.replace(/\band\b/g, " ").replace(/,/g, " ")
-      .split(/\s+/).filter(Boolean);
-
-    const letterByLetter = [];
-    let allMapped = true;
-    for (const token of tokens) {
-      if (token.length === 1 && /^[a-z]$/.test(token)) {
-        letterByLetter.push(token.toUpperCase());
-      } else if (LETTER_MAP[token]) {
-        letterByLetter.push(LETTER_MAP[token]);
-      } else {
-        allMapped = false;
-        break;
-      }
-    }
-
-    // If every token mapped to a letter, user was spelling out loud
-    if (allMapped && letterByLetter.length > 0) {
-      return letterByLetter;
-    }
-
-    // Otherwise treat it as a whole word
-    const cleaned = raw.replace(/[^a-z]/g, "");
-    if (cleaned.length > 0) return cleaned.toUpperCase().split("");
-    return [];
-  }
-
-  /* --------------------------------------------------------
-     Recognition lifecycle — single-shot per mic press
-     -------------------------------------------------------- */
-  function createRecognition() {
-    if (!supported) return null;
+  function createLetterRecognition() {
     const rec = new SpeechRecognition();
     rec.lang = "en-US";
-    rec.continuous = false;
+    rec.continuous = false;   // short burst
     rec.interimResults = false;
     rec.maxAlternatives = 5;
 
     rec.onresult = (event) => {
-      // Collect all alternatives from the first (and only) result
-      const alternatives = [];
+      const alts = [];
       if (event.results[0]) {
         for (let j = 0; j < event.results[0].length; j++) {
-          alternatives.push(event.results[0][j].transcript);
+          alts.push(event.results[0][j].transcript);
         }
       }
-
-      if (currentMode === "spelling") {
-        handleSpellingResult(alternatives);
-      } else {
-        handleLetterResult(alternatives);
+      // Use first alternative that yields valid letters
+      for (const t of alts) {
+        const letters = parseLetters(t);
+        if (letters.length > 0) {
+          if (resultCallback) resultCallback(letters, currentMode);
+          return;
+        }
       }
+      // Fallback: single raw character from top alternative
+      if (alts.length > 0) {
+        const ch = alts[0].trim().toUpperCase().replace(/[^A-Z]/g, "");
+        if (ch.length === 1 && resultCallback) resultCallback([ch], currentMode);
+      }
+    };
+
+    rec.onend = () => {
+      // Auto-restart for continuous letter listening
+      if (wantContinuous) {
+        try {
+          recognition = createLetterRecognition();
+          recognition.start();
+          return; // stay in listening state
+        } catch (_) { /* fall through to stop */ }
+      }
+      listening = false;
+      if (stateCallback) stateCallback(false);
+    };
+
+    rec.onerror = (event) => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      if (event.error === "not-allowed" || event.error === "service-not-available") {
+        wantContinuous = false;
+        listening = false;
+        if (stateCallback) stateCallback(false);
+      }
+      console.warn("Voice letter error:", event.error);
+    };
+
+    return rec;
+  }
+
+  /* ========================================================
+     SPELLING MODE — single-shot, whole-word recognition.
+     Uses expectedWord to pick the best alternative.
+     ======================================================== */
+
+  /** Simple edit distance (Levenshtein) for scoring alternatives */
+  function editDistance(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+    return dp[m][n];
+  }
+
+  /** Parse a transcript into uppercase letter array for spelling */
+  function parseSpelling(transcript) {
+    const raw = transcript.trim().toLowerCase();
+    if (!raw) return [];
+
+    // Try letter-by-letter first ("are oh see kay" → R O C K)
+    const tokens = raw.replace(/\band\b/g, " ").replace(/,/g, " ")
+      .split(/\s+/).filter(Boolean);
+    const mapped = [];
+    let allMapped = true;
+    for (const token of tokens) {
+      if (token.length === 1 && /^[a-z]$/.test(token)) {
+        mapped.push(token.toUpperCase());
+      } else if (LETTER_MAP[token]) {
+        mapped.push(LETTER_MAP[token]);
+      } else { allMapped = false; break; }
+    }
+    if (allMapped && mapped.length > 0) return mapped;
+
+    // Otherwise treat as whole word
+    const cleaned = raw.replace(/[^a-z]/g, "");
+    return cleaned.length > 0 ? cleaned.toUpperCase().split("") : [];
+  }
+
+  function createSpellingRecognition() {
+    const rec = new SpeechRecognition();
+    rec.lang = "en-US";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.maxAlternatives = 10; // more alternatives for better disambiguation
+
+    rec.onresult = (event) => {
+      const alts = [];
+      if (event.results[0]) {
+        for (let j = 0; j < event.results[0].length; j++) {
+          alts.push(event.results[0][j].transcript);
+        }
+      }
+      handleSpellingResult(alts);
     };
 
     rec.onend = () => {
@@ -152,7 +211,7 @@ const VoiceInput = (() => {
     rec.onerror = (event) => {
       listening = false;
       if (event.error !== "no-speech" && event.error !== "aborted") {
-        console.warn("Voice input error:", event.error);
+        console.warn("Voice spelling error:", event.error);
       }
       if (stateCallback) stateCallback(false);
     };
@@ -160,44 +219,53 @@ const VoiceInput = (() => {
     return rec;
   }
 
-  /** Vowel/Consonant mode: use FIRST alternative that yields any valid letters */
-  function handleLetterResult(alternatives) {
-    for (const transcript of alternatives) {
-      const letters = parseLetters(transcript);
-      if (letters.length > 0) {
-        if (resultCallback) resultCallback(letters, currentMode);
-        return;
-      }
-    }
-    // None worked — try raw first alternative as fallback
-    if (alternatives.length > 0) {
-      const raw = alternatives[0].trim().toUpperCase().replace(/[^A-Z]/g, "");
-      if (raw.length === 1) {
-        if (resultCallback) resultCallback([raw], currentMode);
-      }
-    }
-  }
-
-  /** Spelling mode: use FIRST alternative that produces a clean word */
+  /** Pick best alternative using expected word for disambiguation */
   function handleSpellingResult(alternatives) {
-    for (const transcript of alternatives) {
-      const letters = parseSpelling(transcript);
+    // Parse all alternatives into candidate words
+    const candidates = [];
+    for (const t of alternatives) {
+      const letters = parseSpelling(t);
       if (letters.length > 0) {
-        if (resultCallback) resultCallback(letters, currentMode);
-        return;
+        candidates.push(letters);
       }
+    }
+    if (candidates.length === 0) return;
+
+    // If we have an expected word, score by edit distance
+    if (expectedWord) {
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < candidates.length; i++) {
+        const word = candidates[i].join("");
+        const dist = editDistance(word, expectedWord);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+        if (dist === 0) break; // exact match — done
+      }
+      if (resultCallback) resultCallback(candidates[bestIdx], currentMode);
+    } else {
+      // No expected word — use first (highest confidence)
+      if (resultCallback) resultCallback(candidates[0], currentMode);
     }
   }
 
   /* --------------------------------------------------------
      Public: start / stop / toggle
-     Single-shot: one recognition per click (no auto-restart)
      -------------------------------------------------------- */
   function start(mode) {
     if (!supported) return;
     if (listening) stop();
     currentMode = mode || currentMode;
-    recognition = createRecognition();
+
+    if (currentMode === "spelling") {
+      wantContinuous = false;
+      recognition = createSpellingRecognition();
+    } else {
+      wantContinuous = true;
+      recognition = createLetterRecognition();
+    }
     if (!recognition) return;
     try {
       recognition.start();
@@ -205,10 +273,12 @@ const VoiceInput = (() => {
       if (stateCallback) stateCallback(true);
     } catch (e) {
       console.warn("Voice start failed:", e);
+      wantContinuous = false;
     }
   }
 
   function stop() {
+    wantContinuous = false;
     if (!recognition) return;
     try { recognition.abort(); } catch (_) {}
     listening = false;
@@ -226,6 +296,8 @@ const VoiceInput = (() => {
     stop,
     toggle,
     setMode(mode) { currentMode = mode; },
+    /** Set expected answer word (uppercase) for spelling disambiguation */
+    setExpectedWord(word) { expectedWord = (word || "").toUpperCase(); },
     onResult(cb) { resultCallback = cb; },
     onStateChange(cb) { stateCallback = cb; },
   };
