@@ -83,53 +83,69 @@ const VoiceInput = (() => {
         letters.push(LETTER_MAP[token]);
       }
     }
+    // If nothing matched from map, try treating each raw char as a letter
+    if (letters.length === 0) {
+      const ch = raw.replace(/[^a-z]/g, "");
+      if (ch.length === 1) letters.push(ch.toUpperCase());
+    }
     return [...new Set(letters)];
   }
 
   function createLetterRecognition() {
     const rec = new SpeechRecognition();
     rec.lang = "en-US";
-    rec.continuous = false;   // short burst
-    rec.interimResults = false;
+    rec.continuous = true;       // stay open — no restart gaps
+    rec.interimResults = true;   // get partial results for faster feedback
     rec.maxAlternatives = 5;
 
+    // Track which result indices we already processed
+    let processedUpTo = 0;
+
     rec.onresult = (event) => {
-      const alts = [];
-      if (event.results[0]) {
-        for (let j = 0; j < event.results[0].length; j++) {
-          alts.push(event.results[0][j].transcript);
+      for (let i = processedUpTo; i < event.results.length; i++) {
+        const result = event.results[i];
+
+        // Only act on final (confirmed) segments
+        if (!result.isFinal) continue;
+        processedUpTo = i + 1;
+
+        // Collect alternatives for this segment
+        const alts = [];
+        for (let j = 0; j < result.length; j++) {
+          alts.push(result[j].transcript);
         }
-      }
-      // Use first alternative that yields valid letters
-      for (const t of alts) {
-        const letters = parseLetters(t);
-        if (letters.length > 0) {
-          if (resultCallback) resultCallback(letters, currentMode);
-          return;
+
+        // Use first alternative that yields valid letters
+        for (const t of alts) {
+          const letters = parseLetters(t);
+          if (letters.length > 0) {
+            if (resultCallback) resultCallback(letters, currentMode);
+            break;
+          }
         }
-      }
-      // Fallback: single raw character from top alternative
-      if (alts.length > 0) {
-        const ch = alts[0].trim().toUpperCase().replace(/[^A-Z]/g, "");
-        if (ch.length === 1 && resultCallback) resultCallback([ch], currentMode);
       }
     };
 
     rec.onend = () => {
-      // Auto-restart for continuous letter listening
+      // If user still wants to listen, restart (browser may stop continuous)
       if (wantContinuous) {
         try {
           recognition = createLetterRecognition();
           recognition.start();
-          return; // stay in listening state
-        } catch (_) { /* fall through to stop */ }
+          return;
+        } catch (_) { /* fall through */ }
       }
       listening = false;
       if (stateCallback) stateCallback(false);
     };
 
     rec.onerror = (event) => {
-      if (event.error === "no-speech" || event.error === "aborted") return;
+      if (event.error === "no-speech") {
+        // Browser fires no-speech after ~5s silence in continuous mode;
+        // onend will auto-restart if wantContinuous is true
+        return;
+      }
+      if (event.error === "aborted") return;
       if (event.error === "not-allowed" || event.error === "service-not-available") {
         wantContinuous = false;
         listening = false;
