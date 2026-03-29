@@ -1129,9 +1129,8 @@
       if (state.answered) return;
 
       if (state.mode === "spelling") {
-        // In spelling mode, append recognized letters to the spelling tiles
-        if (!state.spelledLetters) state.spelledLetters = [];
-        letters.forEach(ch => state.spelledLetters.push(ch));
+        // In spelling mode, replace spelled letters with recognized result
+        state.spelledLetters = letters;
         renderSpellingTiles();
         highlightExpectedKey();
         SFX.select();
